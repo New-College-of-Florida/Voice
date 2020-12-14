@@ -1,0 +1,9 @@
+Each file
+
+    pitches_raw/<algo>/<song>/<voice>.txt
+
+is the output of algorithm <algo> on the recording <song>/<voice>.wav.
+
+This is without
+- alignment of pitches to the outputs of other algorithms
+- masking with the output of the voiced/unvoiced algorithm
