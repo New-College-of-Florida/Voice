@@ -1,3 +1,2 @@
 # Voice
-Detection of pitches in vocal harmony
-
+Detection of pitches in vocal harmony.
