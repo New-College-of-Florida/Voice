@@ -1,0 +1,34 @@
+import librosa
+import numpy as np
+import os
+import shutil
+
+data_dir = '/Akamai/voice/data/Scherbaum Mshavanadze'
+
+def mp3_to_txt(from_path, to_path):
+    if os.path.exists(to_path):
+        return
+
+    y, sr = librosa.load(from_path)
+    with open(to_path, "w+") as fout:
+        fout.write(f"{len(y)} {sr}\n")
+        for e in y:
+            fout.write(f"{e}\n")
+
+for collection in os.listdir(data_dir):
+    if collection[0] == 'G':
+        for recording in os.listdir(data_dir + '/' + collection):
+            if (recording[-3:] == 'wav'):
+                mp3_to_txt(data_dir + '/' + collection + "/" + recording, "./data/" + recording[:-3] + "txt") 
+
+if len(os.listdir('pitches/')) == 0:
+    pass
+    #os.system('./maddox.out')
+
+res_dir = '/Akamai/voice/data/pitches/maddox/Scherbaum Mshavanadze/'
+for each_file in os.listdir('pitches'):
+    if not os.path.exists(res_dir + each_file[:-11]):
+        os.mkdir(res_dir + each_file[:-11])
+
+    print("Copying ",'pitches/' + each_file, " to ", res_dir + each_file[:-11] + '/' + each_file)
+    shutil.copy('pitches/' + each_file, res_dir + each_file[:-11] + '/' + each_file)
