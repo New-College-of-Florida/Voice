@@ -1,0 +1,8 @@
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+/notebooks/pitch_detection/Maddox/pitches*
+/notebooks/pitch_detection/Maddox/data*
+*.wav
+*.mp3
+*.zip
+*.mp4
