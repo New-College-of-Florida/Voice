@@ -6,3 +6,5 @@
 *.mp3
 *.zip
 *.mp4
+*.out
+!OptimizedRandomForestRegressor.zip
