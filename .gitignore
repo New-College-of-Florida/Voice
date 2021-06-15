@@ -8,3 +8,4 @@
 *.mp4
 *.out
 !OptimizedRandomForestRegressor.zip
+data/*
