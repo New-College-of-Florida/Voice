@@ -93,6 +93,6 @@
     <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
     <script src="assets/js/vendor/popper.min.js"></script>
     <script src="dist/js/bootstrap.min.js"></script>
-    <script src="tool.js?v=2"></script>
+    <script src="tool.js?v=1"></script>
   </body>
 </html>
