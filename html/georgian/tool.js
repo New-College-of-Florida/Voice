@@ -1,5 +1,6 @@
 
 const audio_player = document.querySelector('audio');
+const selectedPoints = {};
 var plot = document.getElementById('plot');
 var plot2 = document.getElementById('plot2');
 var audio_timer = null;
@@ -8,6 +9,49 @@ var first_sounds = null;
 collection_name = null;
 song_name = null;
 voice_name = null;
+
+/**
+ * Function called by plot.on() when a selection is made in the scatterplot.
+ * Adds all points selected to the object selectedPoints, which can be used globally.
+ * Intent is for use in buttons.
+ * 
+ * @param {*} eventData I don't really know what type this is. I treat it like an object. See
+ * https://plotly.com/javascript/plotlyjs-events/#event-data
+ */
+function selection_fn(eventData) {
+
+  //Start by clearing out selectedPoints so we aren't just adding on to it with each selection.
+  for (let key in selectedPoints) {
+    if (selectedPoints.hasOwnProperty(key)) {
+        delete selectedPoints[key];
+    }
+  }
+
+  //Various dev/debug logs (included in for loop below, too)
+  ///console.log("POINTS: "+eventData.points);
+  ///console.log("CURVE NUMBER: "+eventData.points[0].curveNumber);
+  ///console.log("TRACE NAME: "+eventData.points[0].data.name);
+  ///console.log("PLOT.DATA: "+plot.data[0]);
+
+  //For each trace, if it's one of the actual(?) scatter traces, add the selected
+  //points from that trace to selectedPoints using the name of the trace as the key.
+  for (let trace = 0; trace < plot.data.length; trace++) {
+    ///console.log("AT INDEX "+trace+": "+plot.data[trace].name);
+    if (plot.data[trace].name.split(" ")[1] == "voice") {
+      ///console.log("VOICE AT INDEX "+trace+": "+plot.data[trace].name);
+      ///console.log("TRACE.SELECTEDPOINTS: "+plot.data[trace].selectedpoints);
+      if (plot.data[trace].selectedpoints.length != 0) {              
+        selectedPoints[plot.data[trace].name] = plot.data[trace].selectedpoints;
+      }
+      ///console.log("SELECTEDPOINTS AT "+trace+": "+selectedPoints[trace]);
+    }
+  }
+
+  //Final log of selectedPoints for dev/debug purposes.
+  for (let voice in selectedPoints) {
+    console.log("SELECTED POINTS IN "+voice+": "+selectedPoints[voice]);
+  }
+}
 
 function player_update(){
     var time = audio_player.currentTime;
@@ -411,6 +455,8 @@ async function update_plot(collectionName, songName, voiceName) {
   }
 
   $("#audioPlayer").attr("src", "/georgian/data/" + collectionName + "/" + songName + "/" + songNameLast + ".wav");
+
+  plot.on("plotly_selected", selection_fn)
 }
 
 $( document ).ready(function() {
