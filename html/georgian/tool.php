@@ -70,6 +70,7 @@
             </audio>
            <div id="plot" style="width:900px; height:500px; margin-left:-120px"></div>
 <!--            <div id="plot2" style="width:500; height:500px; margin-left:-150px"></div> -->
+            <button id="delete_button" onclick = "on_button_delete()" type="button">Delete Selected</button>
 
             <div id="plot2" style="margin-top: 10px; width:500; height:500px; display: flex; justify-content: center"></div>
 

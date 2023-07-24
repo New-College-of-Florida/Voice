@@ -22,7 +22,7 @@ function selection_fn(eventData) {
 
   //Start by clearing out selectedPoints so we aren't just adding on to it with each selection.
   for (let key in selectedPoints) {
-    if (selectedPoints.hasOwnProperty(key)) {
+    if (selectedPoints.hasOwnProperty(key)) { //Not sure why this is important?
         delete selectedPoints[key];
     }
   }
@@ -50,6 +50,32 @@ function selection_fn(eventData) {
   //Final log of selectedPoints for dev/debug purposes.
   for (let voice in selectedPoints) {
     console.log("SELECTED POINTS IN "+voice+": "+selectedPoints[voice]);
+  }
+}
+
+/**
+ * Function called by the button "delete_button" when clicked.
+ * Changes the y value of all selected points to 0, effectively
+ * "deleting" them.
+ */
+function on_button_delete() {
+
+  //For each trace, if that trace is a key in selectedPoints, make a copy of the y value array for that trace
+  for (let trace = 0; trace < plot.data.length; trace++) {
+    if (selectedPoints.hasOwnProperty(plot.data[trace].name)) {
+      ///console.log("VOICE_DEL: "+plot.data[trace].name);
+      var newData = plot.data[trace].y
+      //For every point in the selected points of that trace, find that index in newData and set it to 0.
+      for (let point in selectedPoints[plot.data[trace].name]) {
+        ///console.log("POINT_DEL: "+selectedPoints[plot.data[trace].name][point]);
+        newData[selectedPoints[plot.data[trace].name][point]] = 0;
+      }
+      //Package up the new array of y values in an update, and send the update using restyle.
+      var update = {
+        y: [newData] //When sending an array as part of the update, it needs to be put inside another array.
+      }
+      Plotly.restyle(plot, update, trace);
+    }
   }
 }
 
