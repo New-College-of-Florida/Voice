@@ -72,7 +72,6 @@
 <!--            <div id="plot2" style="width:500; height:500px; margin-left:-150px"></div> -->
             <button id="delete_button" onclick = "on_button_delete()" type="button">Delete Selected</button>
             <button id="move_words_button" onclick = "on_button_move_over()" type="button">Move Words</button>
-            <button id="load_words_button" onclick = "load_annotations()" type="button">Load Words from Array</button>
 
             <div id="plot2" style="margin-top: 10px; width:500; height:500px; display: flex; justify-content: center"></div>
 

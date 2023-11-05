@@ -18,8 +18,13 @@ voice_name = null;
  * 
  * the rapidly dwindling sanity of plotly programmers as expressed through code comments
  */
-function load_annotations() {
-  const wordy_array = [['Thirteen', 13], ['Fourteen', 14] , ['Fifteen', 15]]; //this kills the other hardcoded ones i did by the way
+async function load_annotations(syllables, start_time, increment) {
+  //const wordy_array = [['Thirteen', 13], ['Fourteen', 14] , ['Fifteen', 15]]; //this kills the other hardcoded ones i did by the way
+  wordy_array = [];
+  for (let syllableIndex = 0; syllableIndex < syllables.length; syllableIndex++) {
+    wordy_array.push([syllables[syllableIndex], (start_time + (increment * syllableIndex))])
+  }
+
   let update_words = { //setting up update_words like this seems simplest
     annotations: []
   }
@@ -27,7 +32,7 @@ function load_annotations() {
   for (let word in wordy_array) { //i hardly understand the difference between let and var but i think let has smaller scope which i like
     let a_word = {
       x: wordy_array[word][1],
-      y: 5,
+      y: 25,
       xref: 'x',
       yref: 'y',
       text: wordy_array[word][0],
@@ -652,6 +657,8 @@ async function update_plot(collectionName, songName, voiceName) {
   $("#audioPlayer").attr("src", "data/" + collectionName + "/" + songName + "/" + songNameLast + ".wav");
 
   plot.on("plotly_selected", selection_fn)
+
+  await load_annotations(syllables, 19, 1.5); //sabodisho specific
 }
 
 $( document ).ready(function() {
