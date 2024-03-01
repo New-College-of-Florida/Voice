@@ -6,150 +6,411 @@ var plot2 = document.getElementById('plot2');
 var audio_timer = null;
 var audio_shifts = null;
 var first_sounds = null;
-collection_name = null;
-song_name = null;
-voice_name = null;
+var collection_name = null;
+var song_name = null;
+var voice_name = null;
+var selected_lyrics = 0;
 
 /**
- * Sloppy no-sleep function to load in an array of pairs (word, x position).
- * Called by a button. The "load words from array" one. I don't know when would
- * really be best. Logs an error if no song has been chosen yet. Right after that,
- * I guess? I don't know.
- * 
- * the rapidly dwindling sanity of plotly programmers as expressed through code comments
+ * Loads time blocks for a given voice from a text file.
+ * Time blocks represent valid times for annotations.
+ *
+ * @param {string} collectionName - The name of the collection of songs.
+ * @param {string} songName - The name of the song for which to load time blocks.
+ * @param {string} voiceName - The name of the voice (bass, mid, top) for which to load time blocks.
+ * @returns {Promise<Array<number>>} A promise that resolves to an array of time blocks as numbers.
  */
-async function load_annotations(syllables, start_time, increment) {
-  //const wordy_array = [['Thirteen', 13], ['Fourteen', 14] , ['Fifteen', 15]]; //this kills the other hardcoded ones i did by the way
-  wordy_array = [];
-  for (let syllableIndex = 0; syllableIndex < syllables.length; syllableIndex++) {
-    wordy_array.push([syllables[syllableIndex], (start_time + (increment * syllableIndex))])
+async function load_time_blocks(collectionName, songName, voiceName) {
+  // Determine the file extension based on the voice name
+  let voice_file_extension = get_voice_file_extension(voiceName);
+
+  // Construct the path to the time blocks file
+  let time_blocks_path = "data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voice_file_extension + "_time_blocks.txt";
+  
+  // Perform an AJAX GET request to load the time blocks file
+  let time_blocks_file = await $.ajax({
+    url: time_blocks_path,
+    type:'GET',
+    error: function(response) { console.log(response); }
+  });
+
+  // Split the file content by line breaks and convert each line to a float
+  time_blocks_file = time_blocks_file.split('\r\n').map(parseFloat);
+
+  // Remove the last element, which is NaN due to how the file was written originally.
+  time_blocks_file.pop();
+  
+  // Log the loaded time blocks for debugging purposes
+  console.log("load_time_blocks() loaded:\n" + time_blocks_file);
+
+  // Return the array of time blocks
+  return time_blocks_file;
+}
+
+/**
+ * Moves annotations in the plot based on the selected points and the specified direction.
+ * The closest select annotation is moved to the next valid time block in the direction specified.
+ * If the next time block is occupied by another annotation, all annotations in the direction
+ * are moved to the next available time block.
+ *
+ * @param {Array<number>} chosenPoints - The indices of the selected points in the plot.
+ * @param {Array<number>} time_blocks - The array of valid times for annotations.
+ * @param {string} direction - The direction to move the annotations in, either "right" or "left".
+ * @param {string} lyrics_trace_name - The name of the trace that contains the lyrics annotations.
+ */
+function shiftAnnotations(chosenPoints, time_blocks, direction, lyrics_trace_name) {
+  // Get the current annotations
+  let annotations = plot.layout.annotations;
+
+  // Find the annotation closest to any of the selected points
+  let closestAnnotationIndex = null;
+  let closestDistance = Infinity;
+  for (let annotationIndex =  0; annotationIndex < annotations.length; annotationIndex++) {
+    for (let pointIndex =  0; pointIndex < chosenPoints.length; pointIndex++) {
+
+      // Find the index of the trace that contains the lyrics annotations
+      var trace_index = plot.data.findIndex(function(trace) {
+        return trace.name == lyrics_trace_name
+      });
+      
+      // Calculate the distance between the annotation and the selected point
+      let distance = Math.abs(annotations[annotationIndex].x - plot.data[trace_index].x[chosenPoints[pointIndex]]);
+      
+      // Update the closest annotation index if the current annotation is closer
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestAnnotationIndex = annotationIndex;
+      }
+    }
+  }
+  
+  // Determine the next valid time block in the specified direction
+  let nextTimeBlock;
+  if (direction == "right") {
+    // Find the next time block that is greater than the x-coordinate of the closest annotation
+    nextTimeBlock = time_blocks.find(block => block > annotations[closestAnnotationIndex].x);
+  } else if (direction == "left") {
+    // Find the last time block that is less than the x-coordinate of the closest annotation
+    nextTimeBlock = time_blocks.slice(0, time_blocks.indexOf(annotations[closestAnnotationIndex].x)).pop();
   }
 
-  let update_words = { //setting up update_words like this seems simplest
+  // Check if the next valid time block is occupied by an annotation
+  let isNextTimeBlockOccupied = annotations.some(annotation => annotation.x === nextTimeBlock);
+
+  // If the next valid time block is occupied, move all annotations that are in the specified direction
+  if (isNextTimeBlockOccupied) {
+    let annotationsToMove = [];
+    if (direction == "right") {
+      // Collect all annotations to the right of the closest annotation
+      for (let annotationIndex = closestAnnotationIndex + 1; annotationIndex < annotations.length; annotationIndex++) {
+        annotationsToMove.push(annotations[annotationIndex]);
+      }
+    } else if (direction == "left") {
+      // Collect all annotations to the left of the closest annotation
+      for (let annotationIndex = 0; annotationIndex < closestAnnotationIndex; annotationIndex++) {
+        annotationsToMove.push(annotations[annotationIndex]);
+      }
+    }
+    
+    // Move the annotations to the next available time block in the specified direction
+    for (let annotationIndex = 0; annotationIndex < annotationsToMove.length; annotationIndex++) {
+      if (annotationsToMove[annotationIndex]) {
+        let nextAvailableTimeBlock;
+        if (direction == "right") {
+          // Find the next time block to the right of the current annotation
+          nextAvailableTimeBlock = time_blocks.find(block => block > annotationsToMove[annotationIndex].x);
+        } else if (direction == "left") {
+          // Find the last time block to the left of the current annotation
+          nextAvailableTimeBlock = time_blocks.slice(0, time_blocks.indexOf(annotationsToMove[annotationIndex].x)).pop();
+        }
+        
+        // Update the annotation's x-coordinate if a next available time block is found
+        if (nextAvailableTimeBlock) {
+          annotationsToMove[annotationIndex].x = nextAvailableTimeBlock;
+        }
+      }
+    }
+  }
+  
+  // Move the selected annotation to the next available time block in the specified direction
+  let nextAvailableTimeBlockForSelected;
+  if (direction == "right") {
+    // Find the next time block to the right of the closest annotation
+    nextAvailableTimeBlockForSelected = time_blocks.find(block => block > annotations[closestAnnotationIndex].x);
+  } else if (direction == "left") {
+    // Find the last time block to the left of the closest annotation
+    nextAvailableTimeBlockForSelected = time_blocks.slice(0, time_blocks.indexOf(annotations[closestAnnotationIndex].x)).pop();
+  }
+  
+  // Update the closest annotation's x-coordinate if a next available time block is found
+  if (nextAvailableTimeBlockForSelected) {
+    annotations[closestAnnotationIndex].x = nextAvailableTimeBlockForSelected;
+  }
+  
+  // Update the plot with the new annotations
+  Plotly.relayout(plot, {annotations: annotations});
+}
+
+/**
+ * This function is called when a button to shift annotations in a specific direction is clicked.
+ * It moves the selected annotation to the next valid time block in the direction specified by the button,
+ * as well as all annotations in that direction if the next time block is occupied.
+ *
+ * @param {string} direction - The direction in which to move the annotations, either "right" or "left".
+ */
+function onButtonShiftAnnotations(direction) {
+  // Check if any points have been selected
+  if (Object.keys(selectedPoints).length > 0) {
+    // Determine which time blocks to use based on the selected lyrics
+    let time_blocks;
+    let lyrics_trace_name;
+    if (selected_lyrics == 0) { 
+      time_blocks = [0];
+    } else if (selected_lyrics == 1) {
+      time_blocks = plot.bass_time_blocks;
+      lyrics_trace_name = 'Bass lyrics';
+    } else if (selected_lyrics == 2) {
+      time_blocks = plot.mid_time_blocks;
+      lyrics_trace_name = 'Middle lyrics';
+    } else if (selected_lyrics == 3) {
+      time_blocks = plot.top_time_blocks;
+      lyrics_trace_name = 'Top lyrics';
+    }
+    
+    // Get all selected points for the current lyrics trace
+    let lyricsPoints = [];
+    lyricsPoints.push(...selectedPoints[lyrics_trace_name]);
+    
+    // Call the shiftAnnotations function to move the annotations in the specified direction
+    shiftAnnotations(lyricsPoints, time_blocks, direction, lyrics_trace_name);
+  }
+}
+
+/**
+ * This function moves an annotation to the previous or next valid time block if possible.
+ * If an annotation is already present at the target time block, it merges the texts.
+ *
+ * @param {Array<number>} chosenPoints - The indices of the selected points in the plot.
+ * @param {Array<number>} time_blocks - The array of valid times for annotations.
+ * @param {string} direction - The direction in which to move the annotation, either "right" or "left".
+ * @param {string} lyrics_trace_name - The name of the trace that contains the lyrics annotations.
+ */
+function mergeAnnotation(chosenPoints, time_blocks, direction, lyrics_trace_name) {
+  // Get the current annotations
+  let annotations = plot.layout.annotations;
+  
+  // Find the annotation closest to any of the selected points
+  let closestAnnotationIndex = null;
+  let closestDistance = Infinity;
+  for (var annotationIndex = 0; annotationIndex < annotations.length; annotationIndex++) {
+    for (var pointIndex = 0; pointIndex < chosenPoints.length; pointIndex++) {
+
+      // Find the index of the trace that contains the lyrics annotations
+      var trace_index = plot.data.findIndex(function(trace) {
+        return trace.name == lyrics_trace_name
+      });
+
+      // Calculate the distance between the annotation and the selected point
+      var distance = Math.abs(annotations[annotationIndex].x - plot.data[trace_index].x[chosenPoints[pointIndex]]);
+      
+      // Update the closest annotation index if the current annotation is closer
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestAnnotationIndex = annotationIndex;
+      }
+    }
+  }
+
+  // If no annotation is found, log a warning and return
+  if (closestAnnotationIndex === null) {
+    console.warn("WARN: mergeAnnotation() found no annotation!");
+    return;
+  }
+  
+  // Determine the current time block index.
+  let currentTimeBlockIndex = time_blocks.indexOf(annotations[closestAnnotationIndex].x);
+  let targetTimeBlockIndex = currentTimeBlockIndex;
+
+  // If the shift direction is "left"...
+  if (direction === "left") {
+
+    // Calculate the previous time block index
+    targetTimeBlockIndex--;
+
+    // If there's no previous time block, return
+    if (targetTimeBlockIndex < 0) {
+      console.warn("WARN: mergeAnnotation() found no previous time block!");
+      return;
+    }
+
+  // Else, if the shift direction is "right"...
+  } else if (direction === "right") {
+
+    // Calculate the next time block index
+    targetTimeBlockIndex++;
+
+    // If there's no next time block, return
+    if (targetTimeBlockIndex >= time_blocks.length) {
+      console.warn("WARN: mergeAnnotation() found no next time block!");
+      return;
+    }
+
+  // Else, there was no valid direction given, return.
+  } else {
+    console.warn("WARN: mergeAnnotation() was not given a valid direction!");
+    return;
+  }
+  
+  // Find if there's an annotation at the target time block
+  let targetAnnotationIndex = annotations.findIndex(annotation => annotation.x === time_blocks[targetTimeBlockIndex]);
+  
+  // If there's an annotation at the target time block, merge the texts
+  if (targetAnnotationIndex !== -1) {
+    if (direction === "left") {
+      annotations[targetAnnotationIndex].text += '-' + annotations[closestAnnotationIndex].text;
+    } else {
+      annotations[targetAnnotationIndex].text = annotations[closestAnnotationIndex].text + '-' + annotations[targetAnnotationIndex].text;
+    }
+
+    // Remove the closest annotation
+    annotations.splice(closestAnnotationIndex, 1);
+  } else {
+
+    // Move the closest annotation to the target time block
+    annotations[closestAnnotationIndex].x = time_blocks[targetTimeBlockIndex];
+  }
+
+  // Update the plot with the new annotations
+  Plotly.relayout(plot, {annotations: annotations});
+}
+
+/**
+ * This function is called when the "Merge" buttons are clicked.
+ * It moves the selected annotation back/forward if possible.
+ * If an annotation is already present at the target time block, it merges the texts.
+ * 
+ * @param {string} direction - - The direction in which to move the annotation, either "right" or "left".
+ */
+function onButtonMergeAnnotation(direction) {
+  // Check if any points have been selected
+  if (Object.keys(selectedPoints).length > 0) {
+    // Get all selected points
+    let allSelectedPoints = [];
+    for (let selectedPoint in selectedPoints) {
+      allSelectedPoints.push(...selectedPoints[selectedPoint]);
+    }
+    
+    // Determine which time blocks to use based on the selected lyrics
+    let time_blocks;
+    let lyrics_trace_name;
+    if (selected_lyrics == 0) { 
+      time_blocks = [0];
+    } else if (selected_lyrics == 1) {
+      time_blocks = plot.bass_time_blocks;
+      lyrics_trace_name = 'Bass lyrics';
+    } else if (selected_lyrics == 2) {
+      time_blocks = plot.mid_time_blocks;
+      lyrics_trace_name = 'Middle lyrics';
+    } else if (selected_lyrics == 3) {
+      time_blocks = plot.top_time_blocks;
+      lyrics_trace_name = 'Top lyrics';
+    }
+    
+    // Call the mergeAnnotation function to merge the annotations
+    mergeAnnotation(allSelectedPoints, time_blocks, direction, lyrics_trace_name);
+  }
+}
+
+/**
+ * Loads an array of words and an array of times as annotations, then displays them on the plot.
+ * @param {Array<string>} syllables - The array of words (syllables) to be annotated.
+ * @param {Array<number>} time_blocks - The array of valid times for the words, corresponding to the syllables.
+ */
+async function load_annotations(syllables, time_blocks) {
+  // Create an array to hold the syllables and their corresponding time blocks
+  let wordy_array = [];
+  for (let syllableIndex = 0; syllableIndex < syllables.length; syllableIndex++) {
+    wordy_array.push([syllables[syllableIndex], time_blocks[syllableIndex]])
+  }
+
+  // Prepare the update object for the annotations
+  let update_words = {
     annotations: []
   }
 
-  for (let word in wordy_array) { //i hardly understand the difference between let and var but i think let has smaller scope which i like
+  // Iterate over the wordy_array to create annotation objects
+  for (let word in wordy_array) {
+    // Create an annotation object for each syllable
     let a_word = {
-      x: wordy_array[word][1],
-      y: 25,
+      x: wordy_array[word][1], //Time block for the syllable
+      y: 25, // Y-coordinate for the annotation (fixed at 25 for all annotations)
       xref: 'x',
       yref: 'y',
-      text: wordy_array[word][0],
-      showarrow: false //all our annotation settings can be set here (maybe?)
-    }
-    update_words.annotations[update_words.annotations.length] = a_word; //not a terrible way to append
+      text: wordy_array[word][0], // The syllable text
+      showarrow: false // No arrow is displayed for the annotation
+    };
+
+    // Append the annotation object to the update_words object
+    update_words.annotations.push(a_word);
   }
-  Plotly.relayout(plot, update_words); //i forgot the semicolon here but it worked anyway. i put the semicolon back just in case.
+
+  // Update the plot with the new annotations
+  Plotly.relayout(plot, update_words);
 }
 
 /**
- * Temporary (?) function to be called by the "move words" button.
- * Contrary to popular belief, does not move words. It changes one word into another.
- * Teleporting? Reconstructing? I leave that to you.
+ * Updates the annotations displayed on the plot based on the selected lyrics option.
+ * This function is called when the active lyrics option in the dropdown menu changes.
+ * It loads the annotations for the selected lyrics and updates the plot accordingly.
  */
-function on_button_move_over() {
-  let update_words = {
-    annotations: [ //Relayout does not seem to demand putting arrays inside arrays.
-      {
-        x: 4.5,
-        y: 5,
-        xref: 'x',
-        yref: 'y',
-        text: 'One',
-        showarrow: false
-      },
-      {
-        x: 6.75,
-        y: 5,
-        xref: 'x',
-        yref: 'y',
-        text: 'Two',
-        showarrow: false
-      },
-      {
-        x: 12,
-        y: 5,
-        xref: 'x',
-        yref: 'y',
-        text: 'Three',
-        showarrow: false //Only going to bother moving these three because the others do not seem to move much, if at all.
-      },                 //We still need to INCLUDE them here, though. Or they just disappear.
-      {
-        xref: 'paper',
-        yref: 'paper', //This location is not helpful.
-        x: 0,
-        xanchor: 'right',
-        y: 1,
-        yanchor: 'bottom',
-        text: 'Four',
-        showarrow: false
-      },
-      {
-        xref: 'paper',
-        yref: 'paper', //Not quite helpful, but may have potential for "hybrid" positioning?
-        x: 1,
-        xanchor: 'left',
-        y: 0,
-        yanchor: 'top',
-        text: 'Five',
-        showarrow: false
-      },
-      {
-        xref: 'x',
-        yref: 'paper', //"Hybrid" annotation positioning does not appear to work - docs don't seem to say why.
-        x: 1,
-        y: -1.5,
-        yanchor: 'top',
-        text: 'Six',
-        showarrow: false
-      }
-    ]
+async function update_selected_lyrics() {
+  // Get the active lyrics option from the plot layout
+  selected_lyrics = plot.layout.updatemenus[0].active;
+
+  // Log the active lyrics option for debugging purposes
+  console.log("Active Lyrics set to:", selected_lyrics);
+
+  // Load and display annotations based on the selected lyrics option
+  if (selected_lyrics == 0) {
+    await load_annotations([""], [0]);
+  } else if (selected_lyrics == 1) {
+    await load_annotations(plot.bass_syllables, plot.bass_time_blocks);
+  } else if (selected_lyrics == 2) {
+    await load_annotations(plot.mid_syllables, plot.mid_time_blocks);
+  } else if (selected_lyrics ==3) {
+    await load_annotations(plot.top_syllables, plot.top_time_blocks);
   }
-  
-  Plotly.relayout(plot, update_words);
 }
+
 
 /**
  * Function called by plot.on() when a selection is made in the scatterplot.
  * Adds all points selected to the object selectedPoints, which can be used globally.
  * Intent is for use in buttons.
  * 
- * @param {*} eventData I don't really know what type this is. I treat it like an object. See
- * https://plotly.com/javascript/plotlyjs-events/#event-data
+ * @param {Object} eventData - The data object provided by [Plotly's selection event](https://plotly.com/javascript/plotlyjs-events/#event-data).
  */
 function selection_fn(eventData) {
-
-  //Start by clearing out selectedPoints so we aren't just adding on to it with each selection.
+  // Clear out selectedPoints so we aren't just adding on to it with each selection.
   for (let key in selectedPoints) {
-    if (selectedPoints.hasOwnProperty(key)) { //Not sure why this is important?
-        delete selectedPoints[key];
+    if (selectedPoints.hasOwnProperty(key)) {
+      delete selectedPoints[key];
     }
   }
-
-  //Various dev/debug logs (included in for loop below, too)
-  ///console.log("POINTS: "+eventData.points);
-  ///console.log("CURVE NUMBER: "+eventData.points[0].curveNumber);
-  ///console.log("TRACE NAME: "+eventData.points[0].data.name);
-  ///console.log("PLOT.DATA: "+plot.data[0]);
-
-  //For each trace, if it's one of the actual(?) scatter traces, add the selected
+  
+  //For each trace, if it's one of the actual scatter traces, add the selected
   //points from that trace to selectedPoints using the name of the trace as the key.
   for (let trace = 0; trace < plot.data.length; trace++) {
-    ///console.log("AT INDEX "+trace+": "+plot.data[trace].name);
-    if (plot.data[trace].name.split(" ")[1] == "voice") {
-      ///console.log("VOICE AT INDEX "+trace+": "+plot.data[trace].name);
-      ///console.log("TRACE.SELECTEDPOINTS: "+plot.data[trace].selectedpoints);
-      if (plot.data[trace].selectedpoints.length != 0) {              
-        selectedPoints[plot.data[trace].name] = plot.data[trace].selectedpoints;
+    if (plot.data[trace].name.endsWith("voice") || plot.data[trace].name.endsWith("lyrics")) {
+      if (plot.data[trace].selectedpoints && plot.data[trace].selectedpoints.length != 0) {              
+        selectedPoints[plot.data[trace].name] = plot.data[trace].selectedpoints
       }
-      ///console.log("SELECTEDPOINTS AT "+trace+": "+selectedPoints[trace]);
     }
   }
 
-  //Final log of selectedPoints for dev/debug purposes.
+  // Log the selectedPoints for development and debugging purposes
   for (let voice in selectedPoints) {
-    console.log("SELECTED POINTS IN "+voice+": "+selectedPoints[voice]);
+    console.log("SELECTED POINTS IN " + voice + ": " + selectedPoints[voice]);
   }
 }
 
@@ -159,22 +420,22 @@ function selection_fn(eventData) {
  * "deleting" them.
  */
 function on_button_delete() {
-
   //For each trace, if that trace is a key in selectedPoints, make a copy of the y value array for that trace
-  for (let trace = 0; trace < plot.data.length; trace++) {
-    if (selectedPoints.hasOwnProperty(plot.data[trace].name)) {
-      ///console.log("VOICE_DEL: "+plot.data[trace].name);
-      var newData = plot.data[trace].y
+  for (let traceIndex = 0; traceIndex < plot.data.length; traceIndex++) {
+    if (!plot.data[traceIndex].name.endsWith("lyrics") && selectedPoints.hasOwnProperty(plot.data[traceIndex].name)) {
+      var newData = plot.data[traceIndex].y;
+      
       //For every point in the selected points of that trace, find that index in newData and set it to 0.
-      for (let point in selectedPoints[plot.data[trace].name]) {
-        ///console.log("POINT_DEL: "+selectedPoints[plot.data[trace].name][point]);
-        newData[selectedPoints[plot.data[trace].name][point]] = 0;
+      for (let point in selectedPoints[plot.data[traceIndex].name]) {
+        newData[selectedPoints[plot.data[traceIndex].name][point]] = 0;
       }
+
       //Package up the new array of y values in an update, and send the update using restyle.
       var update = {
         y: [newData] //When sending an array as part of the update, it needs to be put inside another array.
       }
-      Plotly.restyle(plot, update, trace);
+
+      Plotly.restyle(plot, update, traceIndex);
     }
   }
 }
@@ -257,21 +518,31 @@ function get_shifted_time(time, voice) {
   return time + first_sounds[voice_names[voice_name]] - first_sounds[3];
 }
 
+/**
+ * Loads the syllables for a song from a text file and converts them to an array.
+ *
+ * @param {string} collectionName - The name of the collection of songs.
+ * @param {string} songName - The name of the song for which to load syllables.
+ * @returns {Promise<Array<string>>} A promise that resolves to an array of syllables as strings.
+ */
 async function get_annotation_syllables(collectionName, songName) {
-  syllables_file = await $.ajax({
-    url:"data/syllables/" + collectionName + "/" + songName + "/syllables.txt",
-    type:'GET',
+  // Construct the URL to the syllables file
+  let syllables_url = "data/syllables/" + collectionName + "/" + songName + "/syllables.txt";
+  
+  // Perform an AJAX GET request to load the syllables file
+  let syllables_file = await $.ajax({
+    url: syllables_url,
+    type: 'GET',
     error: function(response) { console.log(response); }
   });
+
+  // Split the file content by spaces to create an array of syllables
   syllables_file = syllables_file.split(' ');
   
-  console.log(syllables_file);
-  /**
-  for (let sylldex = 0; sylldex < syllables_file.length; sylldex++) {
-    console.log(syllables_file[sylldex]);
-  }
-  **/
+  // Log the loaded syllables for debugging purposes
+  console.log("get_annotation_syllables() loaded:\n" + syllables_file);
 
+  // Return the array of syllables
   return syllables_file;
 }
 
@@ -386,9 +657,25 @@ async function update_plot(collectionName, songName, voiceName) {
     return false
   }
 
-  var syllables = await get_annotation_syllables(collectionName, songName);
-  
+  plot.bass_syllables = await get_annotation_syllables(collectionName, songName);
+  plot.bass_time_blocks = await load_time_blocks(collectionName, songName, "bass");
   var bass_data = await get_voice(collectionName, songName, "bass");
+
+  var bass_annotation_trace = {
+    x: plot.bass_time_blocks,
+    y: plot.bass_time_blocks.map(() => 25),
+    mode: 'markers',
+    name: 'Bass lyrics',
+    visible: false,
+    showlegend: false,
+    type: 'scattergl',
+    opacity: 0.1,
+    marker: {
+      color: 'red', // Doesn't really matter what color I use... but eh!
+      size: 10, // I need to see!!!
+    }
+  }
+
   var bass_trace = {
     x: bass_data[0],
     y: bass_data[1],
@@ -430,7 +717,24 @@ async function update_plot(collectionName, songName, voiceName) {
     }
   };
 
+  plot.mid_syllables = await get_annotation_syllables(collectionName, songName);
+  plot.mid_time_blocks = await load_time_blocks(collectionName, songName, "mid");
   var mid_data = await get_voice(collectionName, songName, "mid");
+
+  var mid_annotation_trace = {
+    x: plot.mid_time_blocks,
+    y: plot.mid_time_blocks.map(() => 25),
+    mode: 'markers',
+    name: 'Middle lyrics',
+    visible: false,
+    showlegend: false,
+    type: 'scattergl',
+    opacity: 0.1,
+    marker: {
+      color: 'blue', // Doesn't really matter what color I use... but eh!
+      size: 10, // I need to see!!!
+    }
+  }
 
   var mid_trace = {
     x: mid_data[0],
@@ -473,7 +777,25 @@ async function update_plot(collectionName, songName, voiceName) {
     }
   };
 
+  plot.top_syllables = await get_annotation_syllables(collectionName, songName); 
+  plot.top_time_blocks = await load_time_blocks(collectionName, songName, "top");
   var top_data = await get_voice(collectionName, songName, "top");
+
+  var top_annotation_trace = {
+    x: plot.top_time_blocks,
+    y: plot.top_time_blocks.map(() => 25),
+    mode: 'markers',
+    name: 'Top lyrics',
+    visible: false,
+    showlegend: false,
+    type: 'scattergl',
+    opacity: 0.1,
+    marker: {
+      color: 'green', // Doesn't really matter what color I use... but eh!
+      size: 10, // I need to see!!!
+    }
+  }
+
   var top_trace = {
     x: top_data[0],
     y: top_data[1],
@@ -550,63 +872,37 @@ async function update_plot(collectionName, songName, voiceName) {
 
   // console.log(top_data);
 
-  var data = [bass_trace, bass_mad_high_trace, bass_mad_low_trace, mid_trace, mid_mad_low_trace, mid_mad_high_trace, top_trace, top_mad_low_trace, top_mad_high_trace];
+  var data = [bass_trace, bass_annotation_trace, bass_mad_high_trace, bass_mad_low_trace, mid_trace, mid_annotation_trace, mid_mad_low_trace, mid_mad_high_trace, top_trace, top_annotation_trace, top_mad_low_trace, top_mad_high_trace];
   var data2 = [histogram_mid_trace, histogram_bass_trace, histogram_top_trace];
 
   var layout = {
-    annotations: [
+    updatemenus: [
       {
-        x: 2, //Very basic starting point. A bit hidden by the plot. We can manually adjust this, but I can see it being an issue.
-        y: 5,
-        xref: 'x',
-        yref: 'y',
-        text: 'One',
-        showarrow: false //Annoyingly, this appears to default to true. I think that'd be very unpleasant for us to leave on.
-      },
-      {
-        x: 4.5, //Second and third just to see if fractional values work.
-        y: 5,
-        xref: 'x',
-        yref: 'y',
-        text: 'Two',
-        showarrow: false
-      },
-      {
-        x: 6.75,
-        y: 5,
-        xref: 'x',
-        yref: 'y',
-        text: 'Three',
-        showarrow: false
-      },
-      {
-        xref: 'paper',
-        yref: 'paper', //This location is not helpful.
-        x: 0,
-        xanchor: 'right',
-        y: 1,
-        yanchor: 'bottom',
-        text: 'Four',
-        showarrow: false
-      },
-      {
-        xref: 'paper',
-        yref: 'paper', //Not quite helpful, but may have potential for "hybrid" positioning?
-        x: 1,
-        xanchor: 'left',
-        y: 0,
-        yanchor: 'top',
-        text: 'Five',
-        showarrow: false
-      },
-      {
-        xref: 'x',
-        yref: 'paper', //"Hybrid" annotation positioning does not appear to work - docs don't seem to say why.
-        x: 1,
-        y: -1.5,
-        yanchor: 'top',
-        text: 'Six',
-        showarrow: false
+        buttons: [
+          {
+            args: [{'visible': [false, false, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            label: 'Lyrics (None)',
+            method: 'restyle'
+          },
+          {
+            args: [{'visible': [true, false, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            label: 'Lyrics (Bass)',
+            method: 'restyle'
+          },
+          {
+            args: [{'visible': [false, true, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            label: 'Lyrics (Middle)',
+            method: 'restyle'
+          },
+          {
+            args: [{'visible': [false, false, true]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            label: 'Lyrics (Top)',
+            method: 'restyle'
+          }
+        ],
+        direction: 'down',
+        showactive: true,
+        type: 'dropdown',
       }
     ],
     xaxis: { 
@@ -657,8 +953,17 @@ async function update_plot(collectionName, songName, voiceName) {
   $("#audioPlayer").attr("src", "data/" + collectionName + "/" + songName + "/" + songNameLast + ".wav");
 
   plot.on("plotly_selected", selection_fn)
+  plot.on("plotly_restyle", update_selected_lyrics)
 
-  await load_annotations(syllables, 19, 1.5); //sabodisho specific
+  if (selected_lyrics == 0) {
+    await load_annotations([""], [0]);
+  } else if (selected_lyrics == 1) {
+    await load_annotations(plot.bass_syllables, plot.bass_time_blocks);
+  } else if (selected_lyrics == 2) {
+    await load_annotations(plot.mid_syllables, plot.mid_time_blocks);
+  } else if (selected_lyrics ==3) {
+    await load_annotations(plot.top_syllables, plot.top_time_blocks);
+  }
 }
 
 $( document ).ready(function() {
@@ -696,5 +1001,3 @@ $( "#voiceName" ).change(function() {
   voice_name = $("#voiceName").val();
   update_plot(collection_name, song_name, voice_name);
 });
-
-

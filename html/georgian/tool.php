@@ -70,8 +70,11 @@
             </audio>
            <div id="plot" style="width:900px; height:500px; margin-left:-120px"></div>
 <!--            <div id="plot2" style="width:500; height:500px; margin-left:-150px"></div> -->
-            <button id="delete_button" onclick = "on_button_delete()" type="button">Delete Selected</button>
-            <button id="move_words_button" onclick = "on_button_move_over()" type="button">Move Words</button>
+            <button id="delete_button" onclick = "on_button_delete()" type="button">"Delete" Selected Points</button>
+            <button id="shift_words_left_button" onclick = "onButtonShiftAnnotations('left')" type="button"><== Shift Words Left</button>
+            <button id="shift_words_right_button" onclick = "onButtonShiftAnnotations('right')" type="button">Shift Words Right ==></button>
+            <button id="merge_word_left_button" onclick = "onButtonMergeAnnotation('left')" type="button">Merge Word Back</button>
+            <button id="merge_word_right_button" onclick = "onButtonMergeAnnotation('right')" type="button">Merge Word Forward</button>
 
             <div id="plot2" style="margin-top: 10px; width:500; height:500px; display: flex; justify-content: center"></div>
 
