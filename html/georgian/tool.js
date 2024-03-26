@@ -157,6 +157,23 @@ function get_shifted_time(time, voice) {
   return time + first_sounds[voice_names[voice_name]] - first_sounds[3];
 }
 
+async function get_annotation_syllables(collectionName, songName) {
+  //syllablelist = [];
+  console.log("SCREAMING AT YOU!!!");
+  syllables_file = await $.ajax({
+    url:"data/syllables/" + collectionName + "/" + songName + "/syllables.txt",
+    type:'GET',
+    error: function(response) { console.log(response); }
+  });
+  syllables_file = syllables_file.split(' ');
+  
+  for (let sylldex = 0; sylldex < syllables_file.length; sylldex++) {
+    console.log(syllables_file[sylldex]);
+  }
+
+  return syllables_file;
+}
+
 async function get_audio_shift_file(collectionName, songName) {
   /*
   audio_shift_file = await $.ajax({
@@ -176,7 +193,7 @@ async function get_audio_shift_file(collectionName, songName) {
   */
   first_sounds = [];
   first_sounds_file = await $.ajax({
-    url:"/georgian/data/ground-estimate/" + collectionName + "/" + songName + "/first_sounds.txt",
+    url:"data/ground-estimate/" + collectionName + "/" + songName + "/first_sounds.txt",
     type:'GET'
   });
   first_sounds_file = first_sounds_file.split(' ');
@@ -188,13 +205,13 @@ async function get_audio_shift_file(collectionName, songName) {
 function get_file(collectionName, songName, voice, mad = false) {
   if(mad) {
     return $.ajax({
-      url:"/georgian/data/mad/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
+      url:"data/mad/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
       type:'GET'
     });
   } else {
-    console.log("/georgian/data/ground-estimate/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt");
+    console.log("data/ground-estimate/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt");
     return $.ajax({
-        url:"/georgian/data/ground-estimate/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
+        url:"data/ground-estimate/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
         type:'GET'
       });
   }
@@ -236,6 +253,7 @@ async function get_voice(collectionName, songName, voiceName) {
   for(var i = 0;i<dataY.length;i++) {
     data_mad_high.push(dataY[i] + dataMad[i]);
   }
+  await get_annotation_syllables(collectionName, songName);
   
   return [dataX, dataY, data_mad_low, data_mad_high, dataMad];
   
@@ -480,7 +498,7 @@ async function update_plot(collectionName, songName, voiceName) {
     songNameLast = songName;
   }
 
-  $("#audioPlayer").attr("src", "/georgian/data/" + collectionName + "/" + songName + "/" + songNameLast + ".wav");
+  $("#audioPlayer").attr("src", "data/" + collectionName + "/" + songName + "/" + songNameLast + ".wav");
 
   plot.on("plotly_selected", selection_fn)
 }
