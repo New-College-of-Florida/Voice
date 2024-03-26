@@ -11,6 +11,101 @@ song_name = null;
 voice_name = null;
 
 /**
+ * Sloppy no-sleep function to load in an array of pairs (word, x position).
+ * Called by a button. The "load words from array" one. I don't know when would
+ * really be best. Logs an error if no song has been chosen yet. Right after that,
+ * I guess? I don't know.
+ * 
+ * the rapidly dwindling sanity of plotly programmers as expressed through code comments
+ */
+function load_annotations() {
+  const wordy_array = [['Thirteen', 13], ['Fourteen', 14] , ['Fifteen', 15]]; //this kills the other hardcoded ones i did by the way
+  let update_words = { //setting up update_words like this seems simplest
+    annotations: []
+  }
+
+  for (let word in wordy_array) { //i hardly understand the difference between let and var but i think let has smaller scope which i like
+    let a_word = {
+      x: wordy_array[word][1],
+      y: 5,
+      xref: 'x',
+      yref: 'y',
+      text: wordy_array[word][0],
+      showarrow: false //all our annotation settings can be set here (maybe?)
+    }
+    update_words.annotations[update_words.annotations.length] = a_word; //not a terrible way to append
+  }
+  Plotly.relayout(plot, update_words); //i forgot the semicolon here but it worked anyway. i put the semicolon back just in case.
+}
+
+/**
+ * Temporary (?) function to be called by the "move words" button.
+ * Contrary to popular belief, does not move words. It changes one word into another.
+ * Teleporting? Reconstructing? I leave that to you.
+ */
+function on_button_move_over() {
+  let update_words = {
+    annotations: [ //Relayout does not seem to demand putting arrays inside arrays.
+      {
+        x: 4.5,
+        y: 5,
+        xref: 'x',
+        yref: 'y',
+        text: 'One',
+        showarrow: false
+      },
+      {
+        x: 6.75,
+        y: 5,
+        xref: 'x',
+        yref: 'y',
+        text: 'Two',
+        showarrow: false
+      },
+      {
+        x: 12,
+        y: 5,
+        xref: 'x',
+        yref: 'y',
+        text: 'Three',
+        showarrow: false //Only going to bother moving these three because the others do not seem to move much, if at all.
+      },                 //We still need to INCLUDE them here, though. Or they just disappear.
+      {
+        xref: 'paper',
+        yref: 'paper', //This location is not helpful.
+        x: 0,
+        xanchor: 'right',
+        y: 1,
+        yanchor: 'bottom',
+        text: 'Four',
+        showarrow: false
+      },
+      {
+        xref: 'paper',
+        yref: 'paper', //Not quite helpful, but may have potential for "hybrid" positioning?
+        x: 1,
+        xanchor: 'left',
+        y: 0,
+        yanchor: 'top',
+        text: 'Five',
+        showarrow: false
+      },
+      {
+        xref: 'x',
+        yref: 'paper', //"Hybrid" annotation positioning does not appear to work - docs don't seem to say why.
+        x: 1,
+        y: -1.5,
+        yanchor: 'top',
+        text: 'Six',
+        showarrow: false
+      }
+    ]
+  }
+  
+  Plotly.relayout(plot, update_words);
+}
+
+/**
  * Function called by plot.on() when a selection is made in the scatterplot.
  * Adds all points selected to the object selectedPoints, which can be used globally.
  * Intent is for use in buttons.
@@ -158,8 +253,6 @@ function get_shifted_time(time, voice) {
 }
 
 async function get_annotation_syllables(collectionName, songName) {
-  //syllablelist = [];
-  console.log("SCREAMING AT YOU!!!");
   syllables_file = await $.ajax({
     url:"data/syllables/" + collectionName + "/" + songName + "/syllables.txt",
     type:'GET',
@@ -167,9 +260,12 @@ async function get_annotation_syllables(collectionName, songName) {
   });
   syllables_file = syllables_file.split(' ');
   
+  console.log(syllables_file);
+  /**
   for (let sylldex = 0; sylldex < syllables_file.length; sylldex++) {
     console.log(syllables_file[sylldex]);
   }
+  **/
 
   return syllables_file;
 }
@@ -253,7 +349,6 @@ async function get_voice(collectionName, songName, voiceName) {
   for(var i = 0;i<dataY.length;i++) {
     data_mad_high.push(dataY[i] + dataMad[i]);
   }
-  await get_annotation_syllables(collectionName, songName);
   
   return [dataX, dataY, data_mad_low, data_mad_high, dataMad];
   
@@ -286,7 +381,8 @@ async function update_plot(collectionName, songName, voiceName) {
     return false
   }
 
-
+  var syllables = await get_annotation_syllables(collectionName, songName);
+  
   var bass_data = await get_voice(collectionName, songName, "bass");
   var bass_trace = {
     x: bass_data[0],
@@ -453,6 +549,61 @@ async function update_plot(collectionName, songName, voiceName) {
   var data2 = [histogram_mid_trace, histogram_bass_trace, histogram_top_trace];
 
   var layout = {
+    annotations: [
+      {
+        x: 2, //Very basic starting point. A bit hidden by the plot. We can manually adjust this, but I can see it being an issue.
+        y: 5,
+        xref: 'x',
+        yref: 'y',
+        text: 'One',
+        showarrow: false //Annoyingly, this appears to default to true. I think that'd be very unpleasant for us to leave on.
+      },
+      {
+        x: 4.5, //Second and third just to see if fractional values work.
+        y: 5,
+        xref: 'x',
+        yref: 'y',
+        text: 'Two',
+        showarrow: false
+      },
+      {
+        x: 6.75,
+        y: 5,
+        xref: 'x',
+        yref: 'y',
+        text: 'Three',
+        showarrow: false
+      },
+      {
+        xref: 'paper',
+        yref: 'paper', //This location is not helpful.
+        x: 0,
+        xanchor: 'right',
+        y: 1,
+        yanchor: 'bottom',
+        text: 'Four',
+        showarrow: false
+      },
+      {
+        xref: 'paper',
+        yref: 'paper', //Not quite helpful, but may have potential for "hybrid" positioning?
+        x: 1,
+        xanchor: 'left',
+        y: 0,
+        yanchor: 'top',
+        text: 'Five',
+        showarrow: false
+      },
+      {
+        xref: 'x',
+        yref: 'paper', //"Hybrid" annotation positioning does not appear to work - docs don't seem to say why.
+        x: 1,
+        y: -1.5,
+        yanchor: 'top',
+        text: 'Six',
+        showarrow: false
+      }
+    ],
     xaxis: { 
       range:[-3,3]
     }, 

@@ -1,4 +1,5 @@
 <?php
+#$error = "";
 session_start();
 ob_start();
 if($_POST) {
