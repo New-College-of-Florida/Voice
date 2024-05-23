@@ -1,0 +1,9 @@
+0.00 150.30 0.00
+0.00 149.28 0.25
+0.00 149.86 0.21
+# The correct ones:
+#0.00 150.30 0.00
+#0.00 90.50 0.25 90.50 149.28 0.65
+#0.00 90.50 0.21 90.50 149.86 0.06
+#
+#The first triple is there so the automatic shift script can run bug-free.
