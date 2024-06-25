@@ -38,7 +38,7 @@ polyphony/Ground Truth Determiner and Statistical Analysis:
   pitches-vuv-crepe-assisted (other algos) -> ground-estimate (final pitch estimates)
                                            -> ground-estimate-statistics (std, mean, median, mad)
 
-ground-estimate-rfr: ??
+ground-estimate-rfr: unused; was for Random Forest Regressor
 
 Up to this point, all processing is per-voice.
 Now the voices aligned with each other
@@ -210,8 +210,8 @@ Detailed Description
             /Akamai/voice/data/pitches-vuv-crepe-assisted/<algo-short-name>/<collection>/<song>/<voice>.txt
    Notebook: /Akamai/voice/David/notebooks/polyphony/Ground Truth Determiner and Statistical Analysis
    Depends on: 7, 11
-   Output: /Akamai/voice/data/ground-estimate/<collection>/<song>/<voice>.txt
-           /Akamai/voice/data/ground-estimate-statistics/<stat>/<collection>/<song>/<voice>.txt
+   Output: /Akamai/voice/html/georgian/data/ground-estimate/<collection>/<song>/<voice>.txt
+           /Akamai/voice/html/georgian/data/ground-estimate-statistics/<stat>/<collection>/<song>/<voice>.txt
    Comments:
    This tool is used to create final pitch estimates and statistics ("confidence bounds")
    - does not align voices to each other within one song
@@ -221,12 +221,12 @@ Detailed Description
    There was some experimentation: first I shifted the three voice parts to align, then I shifted
    all three to align with the mix.
 
-13. Input:  /Akamai/voice/data/ground-estimate/<collection>/<song>/<voice>.txt
-            /Akamai/voice/data/ground-estimate-statistics/<stat>/<collection>/<song>/<voice>.txt
+13. Input:  /Akamai/voice/html/georgian/data/ground-estimate/<collection>/<song>/<voice>.txt
+            /Akamai/voice/html/georgian/data/ground-estimate-statistics/<stat>/<collection>/<song>/<voice>.txt
    Notebook: /Akamai/voice/David/notebooks/post individual vocal shifts/Shift Songs.ipynb
-   Depends on: 7, 11
-   Output: /Akamai/voice/data/ground-estimate/<collection>/<song>/<voice>_shifted.txt
-           /Akamai/voice/data/ground-estimate-statistics/<stat>/<collection>/<song>/<voice>_shifted.txt
+   Depends on: 12
+   Output: /Akamai/voice/html/georgian/data/ground-estimate/<collection>/<song>/<voice>_shifted.txt
+           /Akamai/voice/html/georgian/data/ground-estimate-statistics/<stat>/<collection>/<song>/<voice>_shifted.txt
            /Akamai/voice/data/pitch-overrides/crepe/<collection>/<song>/<voice>_shifted.txt
    Comments:
    This tool shifts each voice to align with the mix. It optionally performs this task on
