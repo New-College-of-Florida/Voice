@@ -1,0 +1,233 @@
+Here's a brief overview of the dataflow, followed by a detailed description.
+
+Overview
+
+Here are the subdirectories of /Akamai/voice/data and the data flow:
+
+pitches-raw: output of each algorithm, input to algorithm alignment
+
+pitches: output of algorithm alignment, input to voiced-unvoiced
+
+pitches-vuv: output of voiced-unvoiced
+
+pitches-vuv-new:
+- manual pitch deletions, usually just to Crepe (the best algo), using pitch tool
+
+Pitch Tool/Delete Pitches and Correct Octaves (formerly Tool):
+  pitches-vuv-new -> pitches-vuv-new: manual corrections to Crepe
+
+Pitch Tool/Override Pitches and Postprocess:
+  pitches-vuv-new -> pitches-vuv-new
+                  -> pitch-overrides
+					   
+pitch-overrides:
+- manual pitch range boxes used to override Crepe and as advice to other algos
+
+pitches-postprocessed:
+- manual pitch overrides (and more deletions), usually just to Crepe  
+
+pitches-raw-crepe-assisted: output of each algorithm, limited to within 20% of Crepe,
+                            input to algorithm alignment (BUG - should be aligned first)
+
+pitches-crepe-assisted: output of algorithm alignment, input to voiced-unvoiced
+
+pitches-vuv-crepe-assisted: output of voiced-unvoiced
+  
+polyphony/Ground Truth Determiner and Statistical Analysis:
+  pitches-postprocessed (Crepe)
+  pitches-vuv-crepe-assisted (other algos) -> ground-estimate (final pitch estimates)
+                                           -> ground-estimate-statistics (std, mean, median, mad)
+
+ground-estimate-rfr: ??
+
+Up to this point, all processing is per-voice.
+Now the voices aligned with each other
+
+ground-estimate/<collection>/<song>/shifts.txt: hand-made shift amounts for each voice
+
+post individual vocal shifts/Shift Songs.ipynb
+  shifts.txt
+  <voice>.txt -> <voice>_shifted.txt (in various folders)
+              -> <shifted override box files>
+	      -> <shifted mad files>
+
+Detailed Description
+
+!? All the raw and processed data is in /Akamai/voice/data.
+   This is confusing because that directory does not have .git, but some data has been committed (from somewhere).
+
+1. Input:  /Akamai/voice/data/<collection>/<song>/<voice>.(mp3|wav)
+   Notebook: /Akamai/voice/David/notebooks/pitch_detection/<algo long name.ipynb>
+   Depends on: --
+   Output: /Akamai/voice/data/pitches-raw/<algo short name>/<collection>/<song>/<voice>.txt
+   Comments:
+   - one algorithm from Boersma, Crepe, Maddox, Noll, Praat, Yin
+   - output is pitches every 0.01sec in a song
+   - no alignment of pitches
+   - no masking of unvoiced "pitches"
+
+2. Input:  /Akamai/voice/data/<collection>/<song>/<voice>.(mp3|wav)
+   Notebook: /Akamai/voice/David/notebooks/pitch_detection/Voiced-Unvoiced Detection WZC Histogram Analysis.ipynb
+   Depends on: --
+   Output: /Akamai/voice/data/pitches-raw/v-uv/<collection>/<song>/<voice>.txt
+   Comments:
+   - output is 0 for unvoiced, 1 for voiced, every 0.01sec
+   - no alignment of pitches
+   - no masking of unvoiced "pitches"
+
+3. Input:  /Akamai/voice/data/pitches-raw/<algo short name>/<collection>/<song>/<voice>.txt
+   Notebook: /Akamai/voice/David/notebooks/pitch_detection/Cubic Interpolation and Fmindbound for alignment.ipynb
+   Depends on: 1
+   Output: /Akamai/voice/data/pitches/<algo short name>/<collection>/<song>/<voice>.txt
+   Comments:
+   - aligns pitches from different algorithms, for each voice separately; does not align voices to each other
+   - no masking of unvoiced "pitches"
+
+4. Input:  /Akamai/voice/data/pitches/<algo short name>/<collection>/<song>/<voice>.txt
+           /Akamai/voice/data/pitches-raw/v-uv/<collection>/<song>/<voice>.txt
+   Notebook: /Akamai/voice/David/notebooks/pitch_detection/Voiced-Unvoiced Detection Application.ipynb
+   Depends on: 2, 3
+   Output: /Akamai/voice/data/pitches-vuv/<algo short name>/<collection>/<song>/<voice>.txt
+   Comments:
+   - masks unvoiced "pitches" using the output of the voiced/unvoiced algorithm
+   - does not align voices to each other
+
+5. Input: /Akamai/voice/data/pitches-vuv/<algo short name>/<collection>/<song>/<voice>.txt
+   Notebook: -- (linux shell command)
+   Depends on: 4
+   Output: /Akamai/voice/data/pitches-vuv/<algo short name>/<collection>/<song>/<voice>.txt
+   Comments:
+   - cp
+   - copies files to a new directory where they'll be processed in place
+
+!! From this point on the notebooks assume there is a "target algorithm" that is best (it's Crepe),
+   and they help the user improve the target algorithm's pitch estimates.
+   They let the user refer to other algorithms' pitch estimates where Crepe's estimate looks bad.
+   
+6. Input:  /Akamai/voice/data/pitches-vuv-new/<algo short name>/<collection>/<song>/<voice>.txt
+   Notebook: /Akamai/voice/David/notebooks/Pitch Tool/Delete Pitches and Correct Octaves.ipynb
+   Depends on: 5, 6 (itself, since the user can reuse this script)
+   Output: /Akamai/voice/data/pitches-vuv-new/crepe/<collection>/<song>/<voice>.txt
+   Comments:
+   - works on files in place
+   - first stage of manual pitch overrides:
+     - can correct
+       - Crepe (target algo) pitches that should be 0 (usually another voice is singing)
+       - Crepe (target algo) pitches for which another algorithm has a better estimate (in another octave)
+     - cannot correct
+       - consonants that show up as 0's or other pitches (usually no algorithm has a good estimate)
+       - pitches in the wrong octave but for which no algorithm has a good estimate in the right octave
+       - pitches in the right octave that sound wrong 
+     - calculates "notes" for use in this notebook, but the notes are not saved
+     - can "postprocess":
+       - un-zeroes isolated 0's
+       - sets any pitches that don't belong to notes or between-note rises or falls to -1
+   - works on each voice separately; does not align voices to each other
+   
+7. Input:  /Akamai/voice/data/pitches-vuv-new/<algo short name>/<collection>/<song>/<voice>.txt
+   Notebook: /Akamai/voice/David/notebooks/Pitch Tool/Override Pitches and Postprocess.ipynb
+   Depends on: 6, 7 (itself, since the user can reuse this script)
+   Output: /Akamai/voice/data/pitches-postprocessed/crepe/<collection>/<song>/<voice>.txt
+           /Akamai/voice/data/pitch-overrides/crepe/<collection>/<song>/<voice>.txt
+   Comments:
+      This tool is used to create pitch-override boxes and to use note-detection to postprocess the Crepe pitch estimates.
+
+      Pitch-Override Boxes
+      	     The user creates one or more pitch-override boxes for each voice of each song.
+	     The tool writes the pitch-override boxes to /Akamai/voices/data/pitch-overrides.
+
+             Each pitch-override box defines a min and max pitch in a range of time steps,
+	     as guidance for the other algorithms.
+
+      Adding Notes
+      	     In a section where the Crepe note is 0 the user can select either crepe pitches or note pitches.
+	     The tool will add a note whose pitch is the average of the Crepe pitches
+
+      Postprocessing
+             Post-processing sets to 0 all pitches whose note value is 0 and sets negative note values to -1.
+	     Generally long runs of nonzero pitches of indeterminate note are assigned a note of 0;
+	     this means either there is silence or (when there is an override box)
+	     Crepe's estimate should not be considered for the final estimate.
+	     Shorter runs between notes are assigned a negative note value;
+	     this means Crepe should not be used as guidance for the other algorithms
+	     but Crepe's estimate should be considered.
+
+      Usage
+             On each song, the user should
+
+                   Run the manual override tool (6) on each voice to check it's ready for pitch-override and postprocessing.
+		   Make pitch-override boxes for all three voices.
+		   Toggle a 0 note to negative or vice-versa. See "Postprocessing" above.
+		   Add notes and save the note files. (One click saves the currently visible voice notes.)
+		   Postprocess all three voices. (One click postprocesses the currently visible voice.)
+		   Save all three voices. (One click saves the currently visible voice.)
+
+      The postprocessed pitch estimates and notes are saved to /Akamai/voices/data/pitches-postprocessed.
+      The note files have the same format (timestamp pitch) as the pitch files.
+      The override boxes are saved to /Akamai/voices/data/pitch-overrides.
+
+
+8. Input:  /Akamai/voice/data/<collection>/<song>/<voice>.(mp3|wav)
+   Notebook: /Akamai/voice/David/notebooks/post crepe manual corrections/<algo long name.ipynb>
+   Depends on: 7
+   Output: /Akamai/voice/data/pitches-raw-crepe-assisted/<algo short name>/<collection>/<song>/<voice>.txt
+   Comments:
+   This tool recomputes each non-Crepe algorithm estimate, forcing it to be within 20% of Crepe and within
+   manual correction boxes.
+   - one algorithm from Boersma, Maddox, Noll, Praat, Yin
+   - output is pitches every 0.01sec in a song
+   - BUG: no alignment of pitches: here we should use the previous alignment before comparing with Crepe
+   - no masking of unvoiced "pitches"
+
+[UNUSED: 9. Input:  /Akamai/voice/data/<collection>/<song>/<voice>.(mp3|wav)
+   Notebook: /Akamai/voice/David/notebooks/post crepe manual corrections/Voiced-Unvoiced Detection WZC Histogram Analysis.ipynb
+   Depends on: --
+   Output: /Akamai/voice/data/pitches-raw-crepe-assisted/v-uv/<collection>/<song>/<voice>.txt
+   Comments:
+   - The code is identical to Step 2.
+   - The output data differs between .../pitches-raw/v-uv/... and .../pitches-raw-crepe-assisted/v-uv/....,
+     probably because the code was updated and the output of this script is not used.
+]
+
+10. Input:  /Akamai/voice/data/pitches-raw-crepe-assisted/<algo short name>/<collection>/<song>/<voice>.txt
+   Notebook: /Akamai/voice/David/notebooks/post crepe manual corrections/Cubic Interpolation and Fmindbound for alignment.ipynb
+   Depends on: 8
+   Output: /Akamai/voice/data/pitches-crepe-assisted/<algo short name>/<collection>/<song>/<voice>.txt
+   Comments:
+   - The code is identical to Step 3, except it removes the plotting code.
+
+11. Input:  /Akamai/voice/data/pitches-crepe-assisted/<algo short name>/<collection>/<song>/<voice>.txt
+           /Akamai/voice/data/pitches-vuv-new/crepe/<collection>/<song>/<voice>.txt
+   Notebook: /Akamai/voice/David/notebooks/post crepe manual corrections/Voiced-Unvoiced Detection Application.ipynb
+   Depends on: 6 (BUG), 10
+   Output: /Akamai/voice/data/pitches-vuv-crepe-assisted/<algo short name>/<collection>/<song>/<voice>.txt
+   Comments:
+   - masks unvoiced "pitches" for non-Crepe algorithms wherever Crepe has unvoiced "pitches".
+   - BUG: should get Crepe's unvoiced pitches from pitches-postprocessed, not pitches-vuv-new.
+   - does not align voices to each other within one song
+     
+12. Input:  /Akamai/voice/data/pitches-postprocessed/crepe/<collection>/<song>/<voice>.txt
+            /Akamai/voice/data/pitches-vuv-crepe-assisted/<algo-short-name>/<collection>/<song>/<voice>.txt
+   Notebook: /Akamai/voice/David/notebooks/polyphony/Ground Truth Determiner and Statistical Analysis
+   Depends on: 7, 11
+   Output: /Akamai/voice/data/ground-estimate/<collection>/<song>/<voice>.txt
+           /Akamai/voice/data/ground-estimate-statistics/<stat>/<collection>/<song>/<voice>.txt
+   Comments:
+   This tool is used to create final pitch estimates and statistics ("confidence bounds")
+   - does not align voices to each other within one song
+
+!! Up to this point, all processing was per-voice.
+   Now the voices aligned with each other.
+   There was some experimentation: first I shifted the three voice parts to align, then I shifted
+   all three to align with the mix.
+
+13. Input:  /Akamai/voice/data/ground-estimate/<collection>/<song>/<voice>.txt
+            /Akamai/voice/data/ground-estimate-statistics/<stat>/<collection>/<song>/<voice>.txt
+   Notebook: /Akamai/voice/David/notebooks/post individual vocal shifts/Shift Songs.ipynb
+   Depends on: 7, 11
+   Output: /Akamai/voice/data/ground-estimate/<collection>/<song>/<voice>_shifted.txt
+           /Akamai/voice/data/ground-estimate-statistics/<stat>/<collection>/<song>/<voice>_shifted.txt
+           /Akamai/voice/data/pitch-overrides/crepe/<collection>/<song>/<voice>_shifted.txt
+   Comments:
+   This tool shifts each voice to align with the mix. It optionally performs this task on
+   pitch estimates, stats (mad), and/or pitch-override boxes.
