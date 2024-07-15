@@ -3,9 +3,8 @@
 /notebooks/pitch_detection/Maddox/pitches*
 /notebooks/pitch_detection/Maddox/data*
 *.wav
-*.mp3
 *.zip
 *.mp4
 *.out
 !OptimizedRandomForestRegressor.zip
-data/*
+
