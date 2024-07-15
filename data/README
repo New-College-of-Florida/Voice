@@ -247,3 +247,10 @@ Detailed Description
    Comments:
    This tool shifts each voice to align with the mix. It optionally performs this task on
    pitch estimates, stats (mad), and/or pitch-override boxes.
+
+Addendum - July 15th, 2024:
+   - /html/georgian/data is the directory for all data used by the website.
+      - Within, you'll find the songs that are played at /html/georgian/data/<collection>/<song>/<song>.mp3
+      - html/georgian/data/syllables contains the syllables of the lyrics for the songs and the list of all possible timestamps.
+      The syllables are at html/georgian/data/syllables/<collection>/<song>/syllables.txt. The timestamps are separated by voice,
+      at html/georgian/data/syllables/<collection>/<song>/<song>_<voice>_time_blocks.txt.

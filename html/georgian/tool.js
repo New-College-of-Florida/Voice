@@ -577,7 +577,7 @@ async function get_audio_shift_file(collectionName, songName) {
 function get_file(collectionName, songName, voice, mad = false) {
   if(mad) {
     return $.ajax({
-      url:"data/mad/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
+      url:"data/ground-estimate-statistics/mad/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
       type:'GET'
     });
   } else {
@@ -950,7 +950,7 @@ async function update_plot(collectionName, songName, voiceName) {
     songNameLast = songName;
   }
 
-  $("#audioPlayer").attr("src", "data/" + collectionName + "/" + songName + "/" + songNameLast + ".wav");
+  $("#audioPlayer").attr("src", "data/" + collectionName + "/" + songName + "/" + songNameLast + ".mp3");
 
   plot.on("plotly_selected", selection_fn)
   plot.on("plotly_restyle", update_selected_lyrics)
