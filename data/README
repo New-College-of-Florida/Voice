@@ -1,8 +1,24 @@
+Here's an overview of the overview.
+
+Overview of Overview
+
+The code (in notebooks) on dsgpu04 currently writes to /Akamai/voice/data
+or /Akamai/voice/html/georgian/data.
+Neither of these directories is in a github repo
+Most of the data we want in github needs to be in .../html/georgian/data, so
+it is copied over to the corresponding path in a repo (currently /Akamai/voice/David/...).
+
+Exception:
+ - the notebooks write the *notes_shifted.txt files to /Akamai/voice/data/pitches-postprocessed
+   but they are copied to .../David/html/georgian/data/pitches-postprocessed
+   (pending changes to the notebooks...)
+   
 Here's a brief overview of the dataflow, followed by a detailed description.
 
 Overview
 
-Here are the subdirectories of /Akamai/voice/data and the data flow:
+Here are the subdirectories of /Akamai/voice/data (or  /Akamai/voice/html/georgian/data)
+and the data flow:
 
 pitches-raw: output of each algorithm, input to algorithm alignment
 
