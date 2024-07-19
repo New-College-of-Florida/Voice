@@ -7,4 +7,4 @@
 *.mp4
 *.out
 !OptimizedRandomForestRegressor.zip
-
+html/georgian/data/syllables/*/*/*_save.txt

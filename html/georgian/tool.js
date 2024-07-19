@@ -323,14 +323,53 @@ function onButtonMergeAnnotation(direction) {
 
 /**
  * Loads an array of words and an array of times as annotations, then displays them on the plot.
+ * Checks for an existing save file first.
+ * 
  * @param {Array<string>} syllables - The array of words (syllables) to be annotated.
  * @param {Array<number>} time_blocks - The array of valid times for the words, corresponding to the syllables.
+ * @param {string} voiceName - The name of the voice (bass, mid, top) for which to load annotations.
  */
-async function load_annotations(syllables, time_blocks) {
+async function load_annotations(syllables, time_blocks, voiceName) {
   // Create an array to hold the syllables and their corresponding time blocks
   let wordy_array = [];
-  for (let syllableIndex = 0; syllableIndex < syllables.length; syllableIndex++) {
-    wordy_array.push([syllables[syllableIndex], time_blocks[syllableIndex]])
+
+  // The save file, if we find it.
+  let saveFile;
+  
+  // There shouldn't be a save file for None, which sets voiceName to null.
+  if (voiceName) {
+    // Construct the path to the save file
+    let voice_file_extension = get_voice_file_extension(voiceName);
+    let save_path = "data/syllables/" + collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension + "_save.txt";
+    
+    // Try to find the save file
+    saveFile = await $.ajax({
+      type: 'GET',
+      url: save_path,
+      error: function(response) { console.log(response); }
+    });
+  }
+
+  // If the save file exists...
+  if (saveFile) {
+
+    // Parse it...
+    parsedSaveFile = saveFile.split('\n').map(line => {
+      const [time, text] = line.split('\t');
+      return { time: parseFloat(time), text };
+    });
+
+    // Push it to the wordy array.
+    for (let annotation of parsedSaveFile) {
+      wordy_array.push([annotation.text, annotation.time]);
+    }
+
+  // Else...  
+  } else {
+    // Construct the default wordy array.
+    for (let syllableIndex = 0; syllableIndex < syllables.length; syllableIndex++) {
+      wordy_array.push([syllables[syllableIndex], time_blocks[syllableIndex]])
+    }
   }
 
   // Prepare the update object for the annotations
@@ -372,13 +411,13 @@ async function update_selected_lyrics() {
 
   // Load and display annotations based on the selected lyrics option
   if (selected_lyrics == 0) {
-    await load_annotations([""], [0]);
+    await load_annotations([""], [0], null);
   } else if (selected_lyrics == 1) {
-    await load_annotations(plot.bass_syllables, plot.bass_time_blocks);
+    await load_annotations(plot.bass_syllables, plot.bass_time_blocks, "bass");
   } else if (selected_lyrics == 2) {
-    await load_annotations(plot.mid_syllables, plot.mid_time_blocks);
+    await load_annotations(plot.mid_syllables, plot.mid_time_blocks, "mid");
   } else if (selected_lyrics ==3) {
-    await load_annotations(plot.top_syllables, plot.top_time_blocks);
+    await load_annotations(plot.top_syllables, plot.top_time_blocks, "top");
   }
 }
 
@@ -437,6 +476,96 @@ function on_button_delete() {
 
       Plotly.restyle(plot, update, traceIndex);
     }
+  }
+}
+
+/**
+ * Attempts to write the currently selected lyrics position and points to a
+ * server-side save file. Depends on save.php.
+ */
+async function writeSave() {
+  // No changing "None".
+  if (selected_lyrics == 0) {
+    console.log("You aren't supposed to try to edit the None option.");
+    return;
+  }
+
+  // Log the which voice we want to save
+  console.log("Saving data for:", selected_lyrics);
+
+  // Determine which trace to use based on the selected lyrics
+  let lyrics_trace_name;
+  let voice_file_extension;
+  if (selected_lyrics == 1) {
+    lyrics_trace_name = 'Bass lyrics';
+    voice_file_extension = get_voice_file_extension("bass");
+  } else if (selected_lyrics == 2) {
+    lyrics_trace_name = 'Middle lyrics';
+    voice_file_extension = get_voice_file_extension("mid");
+  } else if (selected_lyrics == 3) {
+    lyrics_trace_name = 'Top lyrics';
+    voice_file_extension = get_voice_file_extension("top");
+  }
+
+  // Find the trace that matches the selected lyrics
+  let lyricsTrace = plot.data.find(trace => trace.name === lyrics_trace_name);
+  if (!lyricsTrace) {
+    console.error("Lyrics trace not found for selected lyrics:", lyrics_trace_name);
+    return;
+  }
+
+  // Extract time blocks from the found trace
+  let time_blocks = lyricsTrace.x;
+
+  // Filter annotations to only those that match the selected lyrics
+  let annotations = plot.layout.annotations;
+
+  // Create a map of annotations for quick lookup by time block
+  let annotationMap = new Map();
+  annotations.forEach(annotation => {
+    annotationMap.set(annotation.x, annotation.text);
+  });
+
+  // Iterate through time blocks and pair each with its annotation text or an empty string if no annotation exists
+  let saveData = time_blocks.map(time => {
+    let annotationText = annotationMap.has(time) ? annotationMap.get(time) : "";
+    return [time, annotationText];
+  });
+
+  // At this point, saveData contains pairs of [time, annotationText]
+  // Converting saveData to a string to write to a file
+  let saveDataString = saveData.map(pair => pair.join('\t')).join('\n');
+  
+  // Construct the path to the save file (partially)
+  let save_path = collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension;
+  
+  // Send the save data to be saved
+  let data = new FormData();
+  data.append("data" , saveDataString);
+  data.append("path", save_path)
+  let xhr = new XMLHttpRequest();
+  xhr.open( 'post', 'save.php', true );
+  xhr.send(data);
+}
+
+/**
+ * A function called whenever plot.on('plotly_restyle', ...) is called. It reads the event data to determine
+ * which button made the call, then passes the data to the appropriate function.
+ * 
+ * @param {Object} eventData - The data object provided by [Plotly's restyle](https://plotly.com/javascript/plotlyjs-events/#event-data).
+ */
+function buttonManager(eventData) {
+  switch (eventData[0].buttontype) {
+    case 'lyrics':
+      update_selected_lyrics(eventData);
+      break;
+
+    case 'save':
+      writeSave();
+      break;
+    
+    default:
+      console.warn("An unrecognized button called plotly_restlye! Found button:\t" + eventData[0].buttontype + "\n");
   }
 }
 
@@ -880,29 +1009,44 @@ async function update_plot(collectionName, songName, voiceName) {
       {
         buttons: [
           {
-            args: [{'visible': [false, false, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            args: [{'buttontype': 'lyrics', 'visible': [false, false, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
             label: 'Lyrics (None)',
             method: 'restyle'
           },
           {
-            args: [{'visible': [true, false, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            args: [{'buttontype': 'lyrics', 'visible': [true, false, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
             label: 'Lyrics (Bass)',
             method: 'restyle'
           },
           {
-            args: [{'visible': [false, true, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            args: [{'buttontype': 'lyrics', 'visible': [false, true, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
             label: 'Lyrics (Middle)',
             method: 'restyle'
           },
           {
-            args: [{'visible': [false, false, true]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            args: [{'buttontype': 'lyrics', 'visible': [false, false, true]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
             label: 'Lyrics (Top)',
             method: 'restyle'
           }
         ],
+        yanchor: 'top',
+        y: 0.8,
         direction: 'down',
         showactive: true,
         type: 'dropdown',
+      },
+      {
+        buttons: [
+          {
+            args: [{'buttontype': 'save'}], 
+            label: 'Save Changes for Current Voice',
+            method: 'restyle'
+          }
+        ],
+        yanchor: 'top',
+        y: 1,
+        direction: 'down',
+        type: 'buttons',
       }
     ],
     xaxis: { 
@@ -953,16 +1097,16 @@ async function update_plot(collectionName, songName, voiceName) {
   $("#audioPlayer").attr("src", "data/" + collectionName + "/" + songName + "/" + songNameLast + ".mp3");
 
   plot.on("plotly_selected", selection_fn)
-  plot.on("plotly_restyle", update_selected_lyrics)
+  plot.on("plotly_restyle", buttonManager)
 
   if (selected_lyrics == 0) {
-    await load_annotations([""], [0]);
+    await load_annotations([""], [0], null);
   } else if (selected_lyrics == 1) {
-    await load_annotations(plot.bass_syllables, plot.bass_time_blocks);
+    await load_annotations(plot.bass_syllables, plot.bass_time_blocks, "bass");
   } else if (selected_lyrics == 2) {
-    await load_annotations(plot.mid_syllables, plot.mid_time_blocks);
+    await load_annotations(plot.mid_syllables, plot.mid_time_blocks, "mid");
   } else if (selected_lyrics ==3) {
-    await load_annotations(plot.top_syllables, plot.top_time_blocks);
+    await load_annotations(plot.top_syllables, plot.top_time_blocks, "top");
   }
 }
 
