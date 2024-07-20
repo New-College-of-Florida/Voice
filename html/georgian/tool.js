@@ -561,7 +561,7 @@ async function writeSave() {
   // Extract time blocks from the found trace
   let time_blocks = lyricsTrace.x;
 
-  // Filter annotations to only those that match the selected lyrics
+  // Extract annotations for the current trace
   let annotations = plot.layout.annotations;
 
   // Create a map of annotations for quick lookup by time block
