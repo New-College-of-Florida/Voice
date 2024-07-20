@@ -14,6 +14,7 @@ var selected_lyrics = 0;
 /**
  * Loads time blocks for a given voice from a text file.
  * Time blocks represent valid times for annotations.
+ * Checks for a save file first.
  *
  * @param {string} collectionName - The name of the collection of songs.
  * @param {string} songName - The name of the song for which to load time blocks.
@@ -23,6 +24,44 @@ var selected_lyrics = 0;
 async function load_time_blocks(collectionName, songName, voiceName) {
   // Determine the file extension based on the voice name
   let voice_file_extension = get_voice_file_extension(voiceName);
+
+  // The save file, if we find it.
+  let saveFile;
+  
+  // There shouldn't be a save file for None, which sets voiceName to null.
+  if (voiceName) {
+    // Construct the path to the save file
+    let voice_file_extension = get_voice_file_extension(voiceName);
+    let save_path = "data/syllables/" + collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension + "_save.txt";
+    
+    try {
+      // Try to find the save file
+      saveFile = await $.ajax({
+        type: 'GET',
+        url: save_path,
+        error: function(response) {console.log("Found no save for:\t" + voiceName + "\nReverting to default values.\n");}
+      });
+    } catch (error) {  
+    }
+  }
+
+  // If the save file exists...
+  if (saveFile) {
+
+    // Parse it...
+    parsedSaveFile = saveFile.split(/\r?\n/).map(line => {
+      const [time, text] = line.split('\t');
+      return { time: parseFloat(time), text };
+    });
+
+    
+    // Return the read times.
+    let time_blocks = [];
+    for (let annotation of parsedSaveFile) {
+      time_blocks.push(annotation.time);
+    }
+    return time_blocks;
+  }
 
   // Construct the path to the time blocks file
   let time_blocks_path = "data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voice_file_extension + "_time_blocks.txt";
@@ -342,26 +381,31 @@ async function load_annotations(syllables, time_blocks, voiceName) {
     let voice_file_extension = get_voice_file_extension(voiceName);
     let save_path = "data/syllables/" + collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension + "_save.txt";
     
-    // Try to find the save file
-    saveFile = await $.ajax({
-      type: 'GET',
-      url: save_path,
-      error: function(response) { console.log(response); }
-    });
+    try {
+      // Try to find the save file
+      saveFile = await $.ajax({
+        type: 'GET',
+        url: save_path,
+        error: function(response) {console.log("Found no save for:\t" + voiceName + "\nReverting to default values.\n");}
+      });
+    } catch (error) {  
+    }
   }
 
   // If the save file exists...
   if (saveFile) {
 
     // Parse it...
-    parsedSaveFile = saveFile.split('\n').map(line => {
+    parsedSaveFile = saveFile.split(/\r?\n/).map(line => {
       const [time, text] = line.split('\t');
       return { time: parseFloat(time), text };
     });
 
     // Push it to the wordy array.
     for (let annotation of parsedSaveFile) {
-      wordy_array.push([annotation.text, annotation.time]);
+      if (annotation.text != ""){
+        wordy_array.push([annotation.text, annotation.time]);
+      }
     }
 
   // Else...  
@@ -549,6 +593,95 @@ async function writeSave() {
 }
 
 /**
+ * Adds a point to the current lyrics trace based on the average of selected points
+ * from different the corresponding voice trace.
+ * 
+ * Will not add duplicates.
+ */
+function addAveragePointToLyricsTrace() {
+  // Check if any points have been selected
+  if (Object.keys(selectedPoints).length > 0) {
+    // Determine which voice trace to use based on the selected lyrics
+    let voice_trace_name;
+    if (selected_lyrics == 1) {
+      voice_trace_name = 'Bass voice';
+    } else if (selected_lyrics == 2) {
+      voice_trace_name = 'Middle voice';
+    } else if (selected_lyrics == 3) {
+      voice_trace_name = 'Top voice';
+    } else {
+      console.warn("No points selected or invalid selection.");
+      return;
+    }
+
+    let voiceTraceIndex = plot.data.findIndex(trace => trace.name === voice_trace_name);
+    if (voiceTraceIndex === -1) {
+      console.error("Voice trace not found:", voice_trace_name);
+      return;
+    }
+
+    // Find the selected points for the current voice trace
+    let selectedPointsForVoice = selectedPoints[voice_trace_name];
+    if (!selectedPointsForVoice || selectedPointsForVoice.length === 0) {
+      console.warn("No points selected for the current voice trace.");
+      return;
+    }
+
+    // Calculate the average x value of the selected points
+    let sumX = 0;
+    for (let selectedIndex = 0; selectedIndex < selectedPointsForVoice.length; selectedIndex++) {
+      // Ensure we're accessing the correct trace and point within that trace
+      let pointIndex = selectedPointsForVoice[selectedIndex];
+      if (plot.data[voiceTraceIndex].x[pointIndex] !== undefined) {
+        sumX += plot.data[voiceTraceIndex].x[pointIndex];
+      } else {
+        console.warn("Point index out of bounds or incorrect trace structure.");
+      }
+    }
+    let averageX = parseFloat((sumX / selectedPointsForVoice.length).toFixed(2));
+
+    // Determine which lyrics trace to use based on the selected lyrics
+    let lyrics_trace_name;
+    if (selected_lyrics == 1) {
+      lyrics_trace_name = 'Bass lyrics';
+    } else if (selected_lyrics == 2) {
+      lyrics_trace_name = 'Middle lyrics';
+    } else if (selected_lyrics == 3) {
+      lyrics_trace_name = 'Top lyrics';
+    } else {
+      console.warn("No lyrics selected or invalid selection.");
+      return;
+    }
+
+    // Find the lyrics trace index
+    let lyricsTraceIndex = plot.data.findIndex(trace => trace.name === lyrics_trace_name);
+    if (lyricsTraceIndex === -1) {
+      console.error("Lyrics trace not found:", lyrics_trace_name);
+      return;
+    }
+
+    // No duplicates.
+    if (plot.data[lyricsTraceIndex].x.findIndex(x => x === averageX) !== -1) {
+      console.warn("A point with the exact same x value already exists. Skipping insertion.");
+      return;
+    }
+
+    // Find the correct position to insert the new point to keep the trace sorted
+    let insertIndex = -1;
+    for (let lyricsPointIndex = 0; lyricsPointIndex < plot.data[lyricsTraceIndex].x.length; lyricsPointIndex++) {
+      if (plot.data[lyricsTraceIndex].x[lyricsPointIndex - 1] <= averageX && averageX <= plot.data[lyricsTraceIndex].x[lyricsPointIndex]) {
+        insertIndex = lyricsPointIndex;
+        break;
+      }
+    }
+    
+    // Insert the average x value and the fixed y value at the correct position in the lyrics trace
+    plot.data[lyricsTraceIndex].x.splice(insertIndex, 0, averageX);
+    plot.data[lyricsTraceIndex].y.splice(insertIndex, 0, 25);
+  }
+}
+
+/**
  * A function called whenever plot.on('plotly_restyle', ...) is called. It reads the event data to determine
  * which button made the call, then passes the data to the appropriate function.
  * 
@@ -562,6 +695,10 @@ function buttonManager(eventData) {
 
     case 'save':
       writeSave();
+      break;
+    
+    case 'addTime':
+      addAveragePointToLyricsTrace();
       break;
     
     default:
@@ -1030,7 +1167,7 @@ async function update_plot(collectionName, songName, voiceName) {
           }
         ],
         yanchor: 'top',
-        y: 0.8,
+        y: 0.5,
         direction: 'down',
         showactive: true,
         type: 'dropdown',
@@ -1040,6 +1177,11 @@ async function update_plot(collectionName, songName, voiceName) {
           {
             args: [{'buttontype': 'save'}], 
             label: 'Save Changes for Current Voice',
+            method: 'restyle'
+          },
+          {
+            args: [{'buttontype': 'addTime'}], 
+            label: 'Add Selected Time',
             method: 'restyle'
           }
         ],
