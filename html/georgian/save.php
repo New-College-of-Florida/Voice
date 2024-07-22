@@ -1,5 +1,9 @@
-// Based on https://stackoverflow.com/questions/15722765/saving-a-text-file-on-server-using-javascript
-
+/** Based on https://stackoverflow.com/questions/15722765/saving-a-text-file-on-server-using-javascript
+ * See also https://www.php.net/manual/en/reserved.variables.post.php:
+ * - The comments in tool.js:writeSave() before `xhr.send(data)` explain that
+ *   the content type is multipart/form-data, as required.
+ */
+ 
 /**
 Attempts to perform some level of input validation before writing the save data to a
 save file.

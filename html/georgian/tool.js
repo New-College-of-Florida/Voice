@@ -589,6 +589,11 @@ async function writeSave() {
   data.append("path", save_path)
   let xhr = new XMLHttpRequest();
   xhr.open( 'post', 'save.php', true );
+
+  // https://fetch.spec.whatwg.org/#typedefdef-xmlhttprequestbodyinit:
+  // - safely extracting a FormData ensures that the ContentType is multipart/form-data.
+  // https://xhr.spec.whatwg.org/#the-send()-method:
+  // - Step 4.3 ensures that this is the ContentType in the send() call 
   xhr.send(data);
 }
 
