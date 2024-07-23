@@ -49,7 +49,7 @@ async function load_time_blocks(collectionName, songName, voiceName) {
   if (saveFile) {
 
     // Parse it...
-    parsedSaveFile = saveFile.split(/\r?\n/).map(line => {
+    parsedSaveFile = saveFile.splitlines().map(line => {
       const [time, text] = line.split('\t');
       return { time: parseFloat(time), text };
     });
@@ -74,7 +74,7 @@ async function load_time_blocks(collectionName, songName, voiceName) {
   });
 
   // Split the file content by line breaks and convert each line to a float
-  time_blocks_file = time_blocks_file.split('\r\n').map(parseFloat);
+  time_blocks_file = time_blocks_file.splitlines().map(parseFloat);
 
   // Remove the last element, which is NaN due to how the file was written originally.
   time_blocks_file.pop();
@@ -396,7 +396,7 @@ async function load_annotations(syllables, time_blocks, voiceName) {
   if (saveFile) {
 
     // Parse it...
-    parsedSaveFile = saveFile.split(/\r?\n/).map(line => {
+    parsedSaveFile = saveFile.splitlines().map(line => {
       const [time, text] = line.split('\t');
       return { time: parseFloat(time), text };
     });
@@ -823,7 +823,7 @@ async function get_audio_shift_file(collectionName, songName) {
     url:"data/ground-estimate/" + collectionName + "/" + songName + "/shifts.txt",
     type:'GET'
   });
-  voices = audio_shift_file.split('\n');
+  voices = audio_shift_file.splitlines()
   shifts = [];
   for(let voice_id = 0; voice_id <= 2; voice_id++) {
     shifts[voice_id] = [];
@@ -878,14 +878,14 @@ async function get_voice(collectionName, songName, voiceName) {
   voice_file_extension = get_voice_file_extension(voiceName);
   await get_audio_shift_file(collectionName, songName);
   data = await get_file(collectionName, songName, voice_file_extension);
-  var dataX = data.split('\n').map(function(ln){
+  var dataX = data.splitlines().map(function(ln){
     return get_shifted_time(parseFloat(ln.split(' ')[0]/100), voiceName);
   });
-  var dataY = data.split('\n').map(function(ln){
+  var dataY = data.splitlines().map(function(ln){
     return parseFloat(ln.split(' ')[1]);
   });
   mad = await get_file(collectionName, songName, voice_file_extension, true);
-  var dataMad = mad.split('\n').map(function(ln){
+  var dataMad = mad.splitlines().map(function(ln){
     return parseFloat(ln.split(' ')[1]);
   });
   data_mad_low = [];
