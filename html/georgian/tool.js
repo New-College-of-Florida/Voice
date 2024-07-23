@@ -12,6 +12,23 @@ var voice_name = null;
 var selected_lyrics = 0;
 
 /**
+ * Splits a string into lines.
+ * Cross platform: works for \r\n (Windows) and \n (Linux)
+ * Returns an array of lines, each without newline characters.
+ * Removes a terminal empty line.
+ *
+ * @param {string} s - the string
+ * @returns {Array<string>} An array of strings
+ */
+function splitlines(s) {
+    let lines = s.split(/\r?\n/);
+    while (lines.length > 0 && lines[lines.length-1] == "") {
+	lines.pop();
+    }
+    return lines;
+}
+
+ /**
  * Loads time blocks for a given voice from a text file.
  * Time blocks represent valid times for annotations.
  * Checks for a save file first.
@@ -49,7 +66,7 @@ async function load_time_blocks(collectionName, songName, voiceName) {
   if (saveFile) {
 
     // Parse it...
-    parsedSaveFile = saveFile.splitlines().map(line => {
+    parsedSaveFile = splitlines(saveFile).map(line => {
       const [time, text] = line.split('\t');
       return { time: parseFloat(time), text };
     });
@@ -72,15 +89,13 @@ async function load_time_blocks(collectionName, songName, voiceName) {
     type:'GET',
     error: function(response) { console.log(response); }
   });
+  console.log("load_time_blocks() loaded:\n" + time_blocks_file.slice(0, 10));
 
   // Split the file content by line breaks and convert each line to a float
-  time_blocks_file = time_blocks_file.splitlines().map(parseFloat);
-
-  // Remove the last element, which is NaN due to how the file was written originally.
-  time_blocks_file.pop();
+  time_blocks_file = splitlines(time_blocks_file).map(parseFloat);
   
   // Log the loaded time blocks for debugging purposes
-  console.log("load_time_blocks() loaded:\n" + time_blocks_file);
+  //console.log("load_time_blocks(" + collectionName + ", " + songName + ",  " + voiceName + ") loaded:\n" + time_blocks_file);
 
   // Return the array of time blocks
   return time_blocks_file;
@@ -396,7 +411,7 @@ async function load_annotations(syllables, time_blocks, voiceName) {
   if (saveFile) {
 
     // Parse it...
-    parsedSaveFile = saveFile.splitlines().map(line => {
+    parsedSaveFile = splitlines(saveFile).map(line => {
       const [time, text] = line.split('\t');
       return { time: parseFloat(time), text };
     });
@@ -823,7 +838,7 @@ async function get_audio_shift_file(collectionName, songName) {
     url:"data/ground-estimate/" + collectionName + "/" + songName + "/shifts.txt",
     type:'GET'
   });
-  voices = audio_shift_file.splitlines()
+  voices = splitlines(audio_shift_file)
   shifts = [];
   for(let voice_id = 0; voice_id <= 2; voice_id++) {
     shifts[voice_id] = [];
@@ -878,14 +893,14 @@ async function get_voice(collectionName, songName, voiceName) {
   voice_file_extension = get_voice_file_extension(voiceName);
   await get_audio_shift_file(collectionName, songName);
   data = await get_file(collectionName, songName, voice_file_extension);
-  var dataX = data.splitlines().map(function(ln){
+  var dataX = splitlines(data).map(function(ln){
     return get_shifted_time(parseFloat(ln.split(' ')[0]/100), voiceName);
   });
-  var dataY = data.splitlines().map(function(ln){
+  var dataY = splitlines(data).map(function(ln){
     return parseFloat(ln.split(' ')[1]);
   });
   mad = await get_file(collectionName, songName, voice_file_extension, true);
-  var dataMad = mad.splitlines().map(function(ln){
+  var dataMad = splitlines(mad).map(function(ln){
     return parseFloat(ln.split(' ')[1]);
   });
   data_mad_low = [];
