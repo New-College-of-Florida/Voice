@@ -497,7 +497,7 @@ function selection_fn(eventData) {
   }
 }
 
-/**
+/** FOR TESTING ONLY
  * Function called by the button "delete_button" when clicked.
  * Changes the y value of all selected points to 0, effectively
  * "deleting" them.
