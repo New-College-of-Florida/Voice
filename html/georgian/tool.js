@@ -549,9 +549,6 @@ async function writeSave() {
     return;
   }
 
-  // Log the which voice we want to save
-  console.log("Saving data for:", selected_lyrics);
-
   // Determine which trace to use based on the selected lyrics
   let lyrics_trace_name;
   let voice_file_extension;
@@ -597,10 +594,13 @@ async function writeSave() {
   
   // Construct the path to the save file (partially)
   let save_path = collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension;
+
+  // Log the voice we want to save
+  console.log("Saving data to path\n", save_path);
   
   // Send the save data to be saved
   let data = new FormData();
-  data.append("data" , saveDataString);
+  data.append("data", saveDataString);
   data.append("path", save_path)
   let xhr = new XMLHttpRequest();
   xhr.open( 'post', 'save.php', true );
@@ -608,7 +608,9 @@ async function writeSave() {
   // https://fetch.spec.whatwg.org/#typedefdef-xmlhttprequestbodyinit:
   // - safely extracting a FormData ensures that the ContentType is multipart/form-data.
   // https://xhr.spec.whatwg.org/#the-send()-method:
-  // - Step 4.3 ensures that this is the ContentType in the send() call 
+  // - Step 4.3 ensures that this is the ContentType in the send() call
+  // https://developer.mozilla.org/en-US/docs/Web/API/FormData#browser_compatibility
+  // - shows which browser versions are required  
   xhr.send(data);
 }
 
