@@ -12,6 +12,63 @@ var voice_name = null;
 var selected_lyrics = 0;
 
 /**
+ * Some type definitions for JSDoc which should significantly improve the experience of dealing with this code.
+ */
+
+/**
+ * @typedef {Object} Annotation - Represents an annotation object within the plot.
+ * @property {boolean} showarrow - Determines whether or not the annotation is drawn with an arrow.
+ *                                 If "true", `text` is placed near the arrow's tail. If "false", `text` lines up with the `x` and `y` provided.
+ * @property {string} text - The text content of the annotation.
+ * @property {number} x - The annotation's x position.
+ * @property {string} xref - The annotation's x coordinate axis.
+ * @property {number} y - The annotation's y position.
+ * @property {string} yref - The annotation's y coordinate axis.
+ */
+
+/**
+ * @typedef {Object} HybridAnnotation - Represents a time block and it's annotation within the internal data structure.
+ * @property {number} annotationIndex - The annotation's index within the plot.layout.annotations structure.
+ *                                      `-1` if no annotation exists at this position.
+ * @property {number} timeBlockIndex - The time block's index within the time_blocks structure.
+ * @property {string} text - The text content of the annotation.
+ *                           `null` if no annotation exists at this position.
+ * @property {number} x - The time block's time, which serves as the annotation's x position if it exists.
+ */
+
+/**
+ * Returns the index of the lyrics trace within `plot.data` based on the `lyricsID`.
+ * This is typically passed `selected_lyrics`.
+ * 
+ * @param {number} lyricsID `1` for bass, `2` for middle, `3` for top.
+ * @returns {number} The index of the lyrics trace within `plot.data`, or `-1` if an invalid `lyricsID` was passed.
+ */
+function getLyricsTraceIndex(lyricsID) {
+  // Determine which lyrics trace to use based on the selected lyrics
+  let lyricsTraceName;
+  switch (lyricsID) {
+    case 1:
+      lyricsTraceName = 'Bass lyrics';
+      break;
+    
+    case 2:
+      lyricsTraceName = 'Middle lyrics';
+      break;
+
+    case 3:
+      lyricsTraceName = 'Top lyrics';
+      break;
+    
+    default:
+      console.warn("No lyrics selected or invalid selection.");
+      return -1;
+  }
+    
+  // Find the lyrics trace index
+  return plot.data.findIndex(trace => trace.name === lyricsTraceName);
+}
+
+/**
  * Splits a string into lines.
  * Cross platform: works for \r\n (Windows) and \n (Linux)
  * Returns an array of lines, each without newline characters.
@@ -102,107 +159,145 @@ async function load_time_blocks(collectionName, songName, voiceName) {
 }
 
 /**
+ * Combines annotations and time blocks into a single data structure.
+ * You should strive to manipulate this structure rather than the plot itself,
+ * and then update the plot from your modified structure.
+ * 
+ * @param {Annotation[]} annotations The annotations as retrieved from `plot.layout.annotations`.
+ * @param {number[]} time_blocks The time blocks as retrieved from `plot.data[getLyricsTraceIndex(selected_lyrics)]`.
+ * @returns {HybridAnnotation[]} An array of time blocks and their associated annotations. Refer to the typdef, or this function.
+ */
+function createHybridAnnotationStructure(annotations, time_blocks) {
+  // Initialize an array with the same length as time_blocks, filled with objects indicating no annotation
+  let hybridAnnotations = time_blocks.map((time_block, index) => ({
+    annotationIndex: -1, // No annotation, so index is -1
+    timeBlockIndex: index,
+    text: null, // No annotation, so text is null
+    x: time_block
+  }));
+
+  // Map each annotation to its corresponding time block
+  annotations.forEach((annotation, index) => {
+    // Find the index of the time block for this annotation
+    let hybridAnnotationIndex = hybridAnnotations.findIndex(hybridAnnotation => hybridAnnotation.x === annotation.x);
+    // If the annotation falls within a block, map it; otherwise, it's out of bounds
+    if (hybridAnnotationIndex !== -1) {
+      // Update the structure for the block with this annotation
+      hybridAnnotations[hybridAnnotationIndex] = {
+        ...hybridAnnotations[hybridAnnotationIndex], // Spread existing properties to retain timeBlockIndex and x
+        annotationIndex: index, // Index in the annotations array
+        text: annotation.text // The text of the annotation
+      };
+    }
+  });
+
+  return hybridAnnotations;
+}
+
+/**
+ * Updates the annotations on the plot using the HybridAnnotations structure.
+ * 
+ * @param {HybridAnnotation[]} hybridAnnotations The internal data structure containing time blocks and their associated annotations.
+ */
+function updateAnnotationsFromHybrid(hybridAnnotations) {
+  let newAnnotations = [];
+  
+  hybridAnnotations.forEach((hybridAnnotation) => {
+    
+    if (hybridAnnotation.text !== null) {
+      // Create an annotation object for each syllable
+      let syllable = {
+        showarrow: false, // No arrow is displayed for the annotation
+        text: hybridAnnotation.text, // The syllable text
+        x: hybridAnnotation.x, //Time block for the syllable
+        xref: 'x',
+        y: 25, // Y-coordinate for the annotation (fixed at 25 for all annotations)
+        yref: 'y'
+      };
+      newAnnotations.push(syllable);
+    }
+  });
+  
+  Plotly.relayout(plot, {annotations: newAnnotations});
+}
+
+/**
  * Moves annotations in the plot based on the selected points and the specified direction.
- * The closest select annotation is moved to the next valid time block in the direction specified.
- * If the next time block is occupied by another annotation, all annotations in the direction
- * are moved to the next available time block.
+ * The first selected annotation is moved to the next valid time block in the direction specified.
+ * If the next time block is occupied by another annotation, it moves as well, recursively, until an
+ * open space is filled.
  *
- * @param {Array<number>} chosenPoints - The indices of the selected points in the plot.
- * @param {Array<number>} time_blocks - The array of valid times for annotations.
+ * @param {number[]} chosenPoints - The indices of the selected points in the plot.
+ * @param {number[]} time_blocks - The array of valid times for annotations.
  * @param {string} direction - The direction to move the annotations in, either "right" or "left".
  * @param {string} lyrics_trace_name - The name of the trace that contains the lyrics annotations.
+ * @returns {boolean} False if anything explicitly prevented the move from happening. True otherwise.
  */
 function shiftAnnotations(chosenPoints, time_blocks, direction, lyrics_trace_name) {
-  // Get the current annotations
-  let annotations = plot.layout.annotations;
+  // Create a hybrid structure for easier manipulation
+  let hybridAnnotations = createHybridAnnotationStructure(plot.layout.annotations, time_blocks);
 
-  // Find the annotation closest to any of the selected points
-  let closestAnnotationIndex = null;
-  let closestDistance = Infinity;
-  for (let annotationIndex =  0; annotationIndex < annotations.length; annotationIndex++) {
-    for (let pointIndex =  0; pointIndex < chosenPoints.length; pointIndex++) {
+  // Find the index of the selected annotation.
+  let chosenAnnotationIndex = hybridAnnotations.findIndex((hybridAnnotation) => (hybridAnnotation.x == plot.data[getLyricsTraceIndex(selected_lyrics)].x[chosenPoints[0]]));
 
-      // Find the index of the trace that contains the lyrics annotations
-      var trace_index = plot.data.findIndex(function(trace) {
-        return trace.name == lyrics_trace_name
-      });
-      
-      // Calculate the distance between the annotation and the selected point
-      let distance = Math.abs(annotations[annotationIndex].x - plot.data[trace_index].x[chosenPoints[pointIndex]]);
-      
-      // Update the closest annotation index if the current annotation is closer
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestAnnotationIndex = annotationIndex;
-      }
-    }
-  }
-  
-  // Determine the next valid time block in the specified direction
-  let nextTimeBlock;
-  if (direction == "right") {
-    // Find the next time block that is greater than the x-coordinate of the closest annotation
-    nextTimeBlock = time_blocks.find(block => block > annotations[closestAnnotationIndex].x);
-  } else if (direction == "left") {
-    // Find the last time block that is less than the x-coordinate of the closest annotation
-    nextTimeBlock = time_blocks.slice(0, time_blocks.indexOf(annotations[closestAnnotationIndex].x)).pop();
+  // Don't go out of bounds.
+  if ((chosenAnnotationIndex === time_blocks.length - 1 && direction == "right") || (chosenAnnotationIndex === 0 && direction == "left")) {
+    console.warn(`OUT OF BOUNDS CALL:\n\tshiftAnnotations(${chosenPoints}, ${time_blocks}, ${direction}, ${lyrics_trace_name})\n\n\tSELECTED INDEX:\t${chosenAnnotationIndex}`);
+    return false;
   }
 
-  // Check if the next valid time block is occupied by an annotation
-  let isNextTimeBlockOccupied = annotations.some(annotation => annotation.x === nextTimeBlock);
+  // Try to move the chosen annotation
+  let success = moveAnnotationRecursively(chosenAnnotationIndex, hybridAnnotations, direction);
+  if (!success) {
+    return false;
+  }
 
-  // If the next valid time block is occupied, move all annotations that are in the specified direction
-  if (isNextTimeBlockOccupied) {
-    let annotationsToMove = [];
-    if (direction == "right") {
-      // Collect all annotations to the right of the closest annotation
-      for (let annotationIndex = closestAnnotationIndex + 1; annotationIndex < annotations.length; annotationIndex++) {
-        annotationsToMove.push(annotations[annotationIndex]);
-      }
-    } else if (direction == "left") {
-      // Collect all annotations to the left of the closest annotation
-      for (let annotationIndex = 0; annotationIndex < closestAnnotationIndex; annotationIndex++) {
-        annotationsToMove.push(annotations[annotationIndex]);
-      }
+  // Update the plot with the new annotations
+  updateAnnotationsFromHybrid(hybridAnnotations);
+  return true;
+}
+
+/**
+ * Recursively moves an annotation to the next valid time block in the specified direction.
+ * If the target time block is occupied, it moves the existing annotation there recursively
+ * until an unoccupied block is found.
+ * 
+ * @param {number} targetIndex - The index of the annotation to move within `hybridAnnotations`.
+ * @param {HybridAnnotation[]} hybridAnnotations - The array of hybrid annotations, where each HybridAnnotation contains information about the annotation and its corresponding time block.
+ * @param {string} direction - The direction to move the annotation, either "right" or "left".
+ * @returns {boolean} True if the move was successful, false if the move failed (e.g., due to moving out of bounds or other issues).
+ */
+function moveAnnotationRecursively(targetIndex, hybridAnnotations, direction) {
+  // Don't go out of bounds.
+  if ((targetIndex >= (hybridAnnotations.length - 1) && direction == "right") || (targetIndex <= 0 && direction == "left")) {
+    console.warn(`OUT OF BOUNDS CALL:\n\tmoveAnnotationRecursively(${targetIndex}, ${hybridAnnotations}, ${direction})\n`);
+    return false;
+  }
+
+  let nextTargetIndex;
+  if (direction === "right") {
+    // Find the next time block to the right of the current annotation
+    nextTargetIndex = targetIndex + 1;
+  } else if (direction === "left") {
+    // Find the last time block to the left of the current annotation
+    nextTargetIndex = targetIndex - 1;
+  }
+
+  // If there's an annotation at the target time block, move it
+  if (hybridAnnotations[targetIndex].text !== null) {
+    // Try to move the next annotation out of the way. If it's empty, this always succeeds.
+    let success = moveAnnotationRecursively(nextTargetIndex, hybridAnnotations, direction);
+    if (!success) {
+      return false;
     }
     
-    // Move the annotations to the next available time block in the specified direction
-    for (let annotationIndex = 0; annotationIndex < annotationsToMove.length; annotationIndex++) {
-      if (annotationsToMove[annotationIndex]) {
-        let nextAvailableTimeBlock;
-        if (direction == "right") {
-          // Find the next time block to the right of the current annotation
-          nextAvailableTimeBlock = time_blocks.find(block => block > annotationsToMove[annotationIndex].x);
-        } else if (direction == "left") {
-          // Find the last time block to the left of the current annotation
-          nextAvailableTimeBlock = time_blocks.slice(0, time_blocks.indexOf(annotationsToMove[annotationIndex].x)).pop();
-        }
-        
-        // Update the annotation's x-coordinate if a next available time block is found
-        if (nextAvailableTimeBlock) {
-          annotationsToMove[annotationIndex].x = nextAvailableTimeBlock;
-        }
-      }
-    }
+    // Move the annotation to the target time block
+    hybridAnnotations[nextTargetIndex].annotationIndex = hybridAnnotations[targetIndex].annotationIndex;
+    hybridAnnotations[nextTargetIndex].text = hybridAnnotations[targetIndex].text;
+    hybridAnnotations[targetIndex].annotationIndex = null;
+    hybridAnnotations[targetIndex].text = null;
   }
-  
-  // Move the selected annotation to the next available time block in the specified direction
-  let nextAvailableTimeBlockForSelected;
-  if (direction == "right") {
-    // Find the next time block to the right of the closest annotation
-    nextAvailableTimeBlockForSelected = time_blocks.find(block => block > annotations[closestAnnotationIndex].x);
-  } else if (direction == "left") {
-    // Find the last time block to the left of the closest annotation
-    nextAvailableTimeBlockForSelected = time_blocks.slice(0, time_blocks.indexOf(annotations[closestAnnotationIndex].x)).pop();
-  }
-  
-  // Update the closest annotation's x-coordinate if a next available time block is found
-  if (nextAvailableTimeBlockForSelected) {
-    annotations[closestAnnotationIndex].x = nextAvailableTimeBlockForSelected;
-  }
-  
-  // Update the plot with the new annotations
-  Plotly.relayout(plot, {annotations: annotations});
+  return true;
 }
 
 /**
@@ -216,27 +311,14 @@ function onButtonShiftAnnotations(direction) {
   // Check if any points have been selected
   if (Object.keys(selectedPoints).length > 0) {
     // Determine which time blocks to use based on the selected lyrics
-    let time_blocks;
-    let lyrics_trace_name;
-    if (selected_lyrics == 0) { 
-      time_blocks = [0];
-    } else if (selected_lyrics == 1) {
-      time_blocks = plot.bass_time_blocks;
-      lyrics_trace_name = 'Bass lyrics';
-    } else if (selected_lyrics == 2) {
-      time_blocks = plot.mid_time_blocks;
-      lyrics_trace_name = 'Middle lyrics';
-    } else if (selected_lyrics == 3) {
-      time_blocks = plot.top_time_blocks;
-      lyrics_trace_name = 'Top lyrics';
-    }
+    let timeBlocksTrace = plot.data[getLyricsTraceIndex(selected_lyrics)];
     
     // Get all selected points for the current lyrics trace
     let lyricsPoints = [];
-    lyricsPoints.push(...selectedPoints[lyrics_trace_name]);
-    
+    lyricsPoints.push(...selectedPoints[timeBlocksTrace.name]);
+
     // Call the shiftAnnotations function to move the annotations in the specified direction
-    shiftAnnotations(lyricsPoints, time_blocks, direction, lyrics_trace_name);
+    shiftAnnotations(lyricsPoints, timeBlocksTrace.x, direction, timeBlocksTrace.name);
   }
 }
 
@@ -355,20 +437,7 @@ function onButtonMergeAnnotation(direction) {
     }
     
     // Determine which time blocks to use based on the selected lyrics
-    let time_blocks;
-    let lyrics_trace_name;
-    if (selected_lyrics == 0) { 
-      time_blocks = [0];
-    } else if (selected_lyrics == 1) {
-      time_blocks = plot.bass_time_blocks;
-      lyrics_trace_name = 'Bass lyrics';
-    } else if (selected_lyrics == 2) {
-      time_blocks = plot.mid_time_blocks;
-      lyrics_trace_name = 'Middle lyrics';
-    } else if (selected_lyrics == 3) {
-      time_blocks = plot.top_time_blocks;
-      lyrics_trace_name = 'Top lyrics';
-    }
+    let time_blocks = plot.data[getLyricsTraceIndex(selected_lyrics)].x;
     
     // Call the mergeAnnotation function to merge the annotations
     mergeAnnotation(allSelectedPoints, time_blocks, direction, lyrics_trace_name);
@@ -440,12 +509,12 @@ async function load_annotations(syllables, time_blocks, voiceName) {
   for (let word in wordy_array) {
     // Create an annotation object for each syllable
     let a_word = {
-      x: wordy_array[word][1], //Time block for the syllable
-      y: 25, // Y-coordinate for the annotation (fixed at 25 for all annotations)
-      xref: 'x',
-      yref: 'y',
+      showarrow: false, // No arrow is displayed for the annotation
       text: wordy_array[word][0], // The syllable text
-      showarrow: false // No arrow is displayed for the annotation
+      x: wordy_array[word][1], //Time block for the syllable
+      xref: 'x',
+      y: 25, // Y-coordinate for the annotation (fixed at 25 for all annotations)
+      yref: 'y'
     };
 
     // Append the annotation object to the update_words object
@@ -472,11 +541,11 @@ async function update_selected_lyrics() {
   if (selected_lyrics == 0) {
     await load_annotations([""], [0], null);
   } else if (selected_lyrics == 1) {
-    await load_annotations(plot.bass_syllables, plot.bass_time_blocks, "bass");
+    await load_annotations(plot.bass_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "bass");
   } else if (selected_lyrics == 2) {
-    await load_annotations(plot.mid_syllables, plot.mid_time_blocks, "mid");
+    await load_annotations(plot.mid_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "mid");
   } else if (selected_lyrics ==3) {
-    await load_annotations(plot.top_syllables, plot.top_time_blocks, "top");
+    await load_annotations(plot.top_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "top");
   }
 }
 
@@ -549,29 +618,18 @@ async function writeSave() {
     return;
   }
 
-  // Determine which trace to use based on the selected lyrics
-  let lyrics_trace_name;
+  // Determine which file extension to use based on the selected lyrics
   let voice_file_extension;
   if (selected_lyrics == 1) {
-    lyrics_trace_name = 'Bass lyrics';
     voice_file_extension = get_voice_file_extension("bass");
   } else if (selected_lyrics == 2) {
-    lyrics_trace_name = 'Middle lyrics';
     voice_file_extension = get_voice_file_extension("mid");
   } else if (selected_lyrics == 3) {
-    lyrics_trace_name = 'Top lyrics';
     voice_file_extension = get_voice_file_extension("top");
   }
 
-  // Find the trace that matches the selected lyrics
-  let lyricsTrace = plot.data.find(trace => trace.name === lyrics_trace_name);
-  if (!lyricsTrace) {
-    console.error("Lyrics trace not found for selected lyrics:", lyrics_trace_name);
-    return;
-  }
-
-  // Extract time blocks from the found trace
-  let time_blocks = lyricsTrace.x;
+  // Extract time blocks from the lyrics trace
+  let time_blocks = plot.data[getLyricsTraceIndex(selected_lyrics)].x;
 
   // Extract annotations for the current trace
   let annotations = plot.layout.annotations;
@@ -662,44 +720,27 @@ function addAveragePointToLyricsTrace() {
     }
     let averageX = parseFloat((sumX / selectedPointsForVoice.length).toFixed(2));
 
-    // Determine which lyrics trace to use based on the selected lyrics
-    let lyrics_trace_name;
-    if (selected_lyrics == 1) {
-      lyrics_trace_name = 'Bass lyrics';
-    } else if (selected_lyrics == 2) {
-      lyrics_trace_name = 'Middle lyrics';
-    } else if (selected_lyrics == 3) {
-      lyrics_trace_name = 'Top lyrics';
-    } else {
-      console.warn("No lyrics selected or invalid selection.");
-      return;
-    }
-
     // Find the lyrics trace index
-    let lyricsTraceIndex = plot.data.findIndex(trace => trace.name === lyrics_trace_name);
-    if (lyricsTraceIndex === -1) {
-      console.error("Lyrics trace not found:", lyrics_trace_name);
-      return;
-    }
+    let lyricsTrace = plot.data[getLyricsTraceIndex(selected_lyrics)];
 
     // No duplicates.
-    if (plot.data[lyricsTraceIndex].x.findIndex(x => x === averageX) !== -1) {
+    if (lyricsTrace.x.findIndex(x => x === averageX) !== -1) {
       console.warn("A point with the exact same x value already exists. Skipping insertion.");
       return;
     }
 
     // Find the correct position to insert the new point to keep the trace sorted
     let insertIndex = -1;
-    for (let lyricsPointIndex = 0; lyricsPointIndex < plot.data[lyricsTraceIndex].x.length; lyricsPointIndex++) {
-      if (plot.data[lyricsTraceIndex].x[lyricsPointIndex - 1] <= averageX && averageX <= plot.data[lyricsTraceIndex].x[lyricsPointIndex]) {
+    for (let lyricsPointIndex = 0; lyricsPointIndex < lyricsTrace.x.length; lyricsPointIndex++) {
+      if (lyricsTrace.x[lyricsPointIndex - 1] <= averageX && averageX <= lyricsTrace.x[lyricsPointIndex]) {
         insertIndex = lyricsPointIndex;
         break;
       }
     }
     
     // Insert the average x value and the fixed y value at the correct position in the lyrics trace
-    plot.data[lyricsTraceIndex].x.splice(insertIndex, 0, averageX);
-    plot.data[lyricsTraceIndex].y.splice(insertIndex, 0, 25);
+    lyricsTrace.x.splice(insertIndex, 0, averageX);
+    lyricsTrace.y.splice(insertIndex, 0, 25);
   }
 }
 
@@ -946,12 +987,12 @@ async function update_plot(collectionName, songName, voiceName) {
   }
 
   plot.bass_syllables = await get_annotation_syllables(collectionName, songName);
-  plot.bass_time_blocks = await load_time_blocks(collectionName, songName, "bass");
+  let bass_time_blocks_initial = await load_time_blocks(collectionName, songName, "bass");
   var bass_data = await get_voice(collectionName, songName, "bass");
 
   var bass_annotation_trace = {
-    x: plot.bass_time_blocks,
-    y: plot.bass_time_blocks.map(() => 25),
+    x: bass_time_blocks_initial,
+    y: bass_time_blocks_initial.map(() => 25),
     mode: 'markers',
     name: 'Bass lyrics',
     visible: false,
@@ -1006,12 +1047,12 @@ async function update_plot(collectionName, songName, voiceName) {
   };
 
   plot.mid_syllables = await get_annotation_syllables(collectionName, songName);
-  plot.mid_time_blocks = await load_time_blocks(collectionName, songName, "mid");
+  let mid_time_blocks_initial = await load_time_blocks(collectionName, songName, "mid");
   var mid_data = await get_voice(collectionName, songName, "mid");
 
   var mid_annotation_trace = {
-    x: plot.mid_time_blocks,
-    y: plot.mid_time_blocks.map(() => 25),
+    x: mid_time_blocks_initial,
+    y: mid_time_blocks_initial.map(() => 25),
     mode: 'markers',
     name: 'Middle lyrics',
     visible: false,
@@ -1066,12 +1107,12 @@ async function update_plot(collectionName, songName, voiceName) {
   };
 
   plot.top_syllables = await get_annotation_syllables(collectionName, songName); 
-  plot.top_time_blocks = await load_time_blocks(collectionName, songName, "top");
+  let top_time_blocks_initial = await load_time_blocks(collectionName, songName, "top");
   var top_data = await get_voice(collectionName, songName, "top");
 
   var top_annotation_trace = {
-    x: plot.top_time_blocks,
-    y: plot.top_time_blocks.map(() => 25),
+    x: top_time_blocks_initial,
+    y: top_time_blocks_initial.map(() => 25),
     mode: 'markers',
     name: 'Top lyrics',
     visible: false,
@@ -1266,11 +1307,11 @@ async function update_plot(collectionName, songName, voiceName) {
   if (selected_lyrics == 0) {
     await load_annotations([""], [0], null);
   } else if (selected_lyrics == 1) {
-    await load_annotations(plot.bass_syllables, plot.bass_time_blocks, "bass");
+    await load_annotations(plot.bass_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "bass");
   } else if (selected_lyrics == 2) {
-    await load_annotations(plot.mid_syllables, plot.mid_time_blocks, "mid");
+    await load_annotations(plot.mid_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "mid");
   } else if (selected_lyrics ==3) {
-    await load_annotations(plot.top_syllables, plot.top_time_blocks, "top");
+    await load_annotations(plot.top_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "top");
   }
 }
 
