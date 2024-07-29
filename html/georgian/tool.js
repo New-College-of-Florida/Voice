@@ -27,7 +27,9 @@ var selected_lyrics = 0;
  */
 
 /**
- * @typedef {Object} HybridAnnotation - Represents a time block and it's annotation within the internal data structure.
+ * @todo Replace existing usage of time_blocks and plot.layout.annotations with this structure wherever possible.
+ *       Example: When passing arguments to most of our written functions. Reading/writing of saves?
+ * @typedef {Object} timeSyllable - Represents a time block and it's annotation within the internal data structure.
  * @property {number} annotationIndex - The annotation's index within the plot.layout.annotations structure.
  *                                      `-1` if no annotation exists at this position.
  * @property {number} timeBlockIndex - The time block's index within the time_blocks structure.
@@ -165,11 +167,11 @@ async function load_time_blocks(collectionName, songName, voiceName) {
  * 
  * @param {Annotation[]} annotations The annotations as retrieved from `plot.layout.annotations`.
  * @param {number[]} time_blocks The time blocks as retrieved from `plot.data[getLyricsTraceIndex(selected_lyrics)]`.
- * @returns {HybridAnnotation[]} An array of time blocks and their associated annotations. Refer to the typdef, or this function.
+ * @returns {timeSyllable[]} An array of time blocks and their associated annotations. Refer to the typdef, or this function.
  */
-function createHybridAnnotationStructure(annotations, time_blocks) {
+function createTimeSyllableStructure(annotations, time_blocks) {
   // Initialize an array with the same length as time_blocks, filled with objects indicating no annotation
-  let hybridAnnotations = time_blocks.map((time_block, index) => ({
+  let timeSyllables = time_blocks.map((time_block, index) => ({
     annotationIndex: -1, // No annotation, so index is -1
     timeBlockIndex: index,
     text: null, // No annotation, so text is null
@@ -179,37 +181,37 @@ function createHybridAnnotationStructure(annotations, time_blocks) {
   // Map each annotation to its corresponding time block
   annotations.forEach((annotation, index) => {
     // Find the index of the time block for this annotation
-    let hybridAnnotationIndex = hybridAnnotations.findIndex(hybridAnnotation => hybridAnnotation.x === annotation.x);
+    let timeSyllableIndex = timeSyllables.findIndex(timeSyllable => timeSyllable.x === annotation.x);
     // If the annotation falls within a block, map it; otherwise, it's out of bounds
-    if (hybridAnnotationIndex !== -1) {
+    if (timeSyllableIndex !== -1) {
       // Update the structure for the block with this annotation
-      hybridAnnotations[hybridAnnotationIndex] = {
-        ...hybridAnnotations[hybridAnnotationIndex], // Spread existing properties to retain timeBlockIndex and x
+      timeSyllables[timeSyllableIndex] = {
+        ...timeSyllables[timeSyllableIndex], // Spread existing properties to retain timeBlockIndex and x
         annotationIndex: index, // Index in the annotations array
         text: annotation.text // The text of the annotation
       };
     }
   });
 
-  return hybridAnnotations;
+  return timeSyllables;
 }
 
 /**
- * Updates the annotations on the plot using the HybridAnnotations structure.
+ * Updates the annotations on the plot using the TimeSyllables structure.
  * 
- * @param {HybridAnnotation[]} hybridAnnotations The internal data structure containing time blocks and their associated annotations.
+ * @param {timeSyllable[]} timeSyllables The internal data structure containing time blocks and their associated annotations.
  */
-function updateAnnotationsFromHybrid(hybridAnnotations) {
+function updateAnnotationsFromTimeSyllables(timeSyllables) {
   let newAnnotations = [];
   
-  hybridAnnotations.forEach((hybridAnnotation) => {
+  timeSyllables.forEach((timeSyllable) => {
     
-    if (hybridAnnotation.text !== null) {
+    if (timeSyllable.text !== null) {
       // Create an annotation object for each syllable
       let syllable = {
         showarrow: false, // No arrow is displayed for the annotation
-        text: hybridAnnotation.text, // The syllable text
-        x: hybridAnnotation.x, //Time block for the syllable
+        text: timeSyllable.text, // The syllable text
+        x: timeSyllable.x, //Time block for the syllable
         xref: 'x',
         y: 25, // Y-coordinate for the annotation (fixed at 25 for all annotations)
         yref: 'y'
@@ -234,11 +236,11 @@ function updateAnnotationsFromHybrid(hybridAnnotations) {
  * @returns {boolean} False if anything explicitly prevented the move from happening. True otherwise.
  */
 function shiftAnnotations(chosenPoints, time_blocks, direction, lyrics_trace_name) {
-  // Create a hybrid structure for easier manipulation
-  let hybridAnnotations = createHybridAnnotationStructure(plot.layout.annotations, time_blocks);
+  // Create a timeSyllable structure for easier manipulation
+  let timeSyllables = createTimeSyllableStructure(plot.layout.annotations, time_blocks);
 
   // Find the index of the selected annotation.
-  let chosenAnnotationIndex = hybridAnnotations.findIndex((hybridAnnotation) => (hybridAnnotation.x == plot.data[getLyricsTraceIndex(selected_lyrics)].x[chosenPoints[0]]));
+  let chosenAnnotationIndex = timeSyllables.findIndex((timeSyllable) => (timeSyllable.x == plot.data[getLyricsTraceIndex(selected_lyrics)].x[chosenPoints[0]]));
 
   // Don't go out of bounds.
   if ((chosenAnnotationIndex === time_blocks.length - 1 && direction == "right") || (chosenAnnotationIndex === 0 && direction == "left")) {
@@ -247,13 +249,13 @@ function shiftAnnotations(chosenPoints, time_blocks, direction, lyrics_trace_nam
   }
 
   // Try to move the chosen annotation
-  let success = moveAnnotationRecursively(chosenAnnotationIndex, hybridAnnotations, direction);
+  let success = moveAnnotationRecursively(chosenAnnotationIndex, timeSyllables, direction);
   if (!success) {
     return false;
   }
 
   // Update the plot with the new annotations
-  updateAnnotationsFromHybrid(hybridAnnotations);
+  updateAnnotationsFromTimeSyllables(timeSyllables);
   return true;
 }
 
@@ -262,15 +264,15 @@ function shiftAnnotations(chosenPoints, time_blocks, direction, lyrics_trace_nam
  * If the target time block is occupied, it moves the existing annotation there recursively
  * until an unoccupied block is found.
  * 
- * @param {number} targetIndex - The index of the annotation to move within `hybridAnnotations`.
- * @param {HybridAnnotation[]} hybridAnnotations - The array of hybrid annotations, where each HybridAnnotation contains information about the annotation and its corresponding time block.
+ * @param {number} targetIndex - The index of the annotation to move within `timeSyllables`.
+ * @param {timeSyllable[]} timeSyllables - The array of TimeSyllables, where each TimeSyllable contains information about the annotation and its corresponding time block.
  * @param {string} direction - The direction to move the annotation, either "right" or "left".
  * @returns {boolean} True if the move was successful, false if the move failed (e.g., due to moving out of bounds or other issues).
  */
-function moveAnnotationRecursively(targetIndex, hybridAnnotations, direction) {
+function moveAnnotationRecursively(targetIndex, timeSyllables, direction) {
   // Don't go out of bounds.
-  if ((targetIndex >= (hybridAnnotations.length - 1) && direction == "right") || (targetIndex <= 0 && direction == "left")) {
-    console.warn(`OUT OF BOUNDS CALL:\n\tmoveAnnotationRecursively(${targetIndex}, ${hybridAnnotations}, ${direction})\n`);
+  if ((targetIndex >= (timeSyllables.length - 1) && direction == "right") || (targetIndex <= 0 && direction == "left")) {
+    console.warn(`OUT OF BOUNDS CALL:\n\tmoveAnnotationRecursively(${targetIndex}, ${timeSyllables}, ${direction})\n`);
     return false;
   }
 
@@ -284,18 +286,18 @@ function moveAnnotationRecursively(targetIndex, hybridAnnotations, direction) {
   }
 
   // If there's an annotation at the target time block, move it
-  if (hybridAnnotations[targetIndex].text !== null) {
+  if (timeSyllables[targetIndex].text !== null) {
     // Try to move the next annotation out of the way. If it's empty, this always succeeds.
-    let success = moveAnnotationRecursively(nextTargetIndex, hybridAnnotations, direction);
+    let success = moveAnnotationRecursively(nextTargetIndex, timeSyllables, direction);
     if (!success) {
       return false;
     }
     
     // Move the annotation to the target time block
-    hybridAnnotations[nextTargetIndex].annotationIndex = hybridAnnotations[targetIndex].annotationIndex;
-    hybridAnnotations[nextTargetIndex].text = hybridAnnotations[targetIndex].text;
-    hybridAnnotations[targetIndex].annotationIndex = null;
-    hybridAnnotations[targetIndex].text = null;
+    timeSyllables[nextTargetIndex].annotationIndex = timeSyllables[targetIndex].annotationIndex;
+    timeSyllables[nextTargetIndex].text = timeSyllables[targetIndex].text;
+    timeSyllables[targetIndex].annotationIndex = null;
+    timeSyllables[targetIndex].text = null;
   }
   return true;
 }
