@@ -225,7 +225,7 @@ function updateAnnotationsFromTimeSyllables(timeSyllables) {
 
 /**
  * Moves annotations in the plot based on the selected points and the specified direction.
- * The first selected annotation is moved to the next valid time block in the direction specified.
+ * The <direction>most selected annotation is moved to the next valid time block in the direction specified.
  * If the next time block is occupied by another annotation, it moves as well, recursively, until an
  * open space is filled.
  *
@@ -240,7 +240,11 @@ function shiftAnnotations(chosenPoints, time_blocks, direction, lyrics_trace_nam
   let timeSyllables = createTimeSyllableStructure(plot.layout.annotations, time_blocks);
 
   // Find the index of the selected annotation.
-  let chosenAnnotationIndex = timeSyllables.findIndex((timeSyllable) => (timeSyllable.x == plot.data[getLyricsTraceIndex(selected_lyrics)].x[chosenPoints[0]]));
+  let preferredIndex = 0;
+  if (direction == "right") {
+    preferredIndex = chosenPoints.length - 1
+  }
+  let chosenAnnotationIndex = timeSyllables.findIndex((timeSyllable) => (timeSyllable.x == plot.data[getLyricsTraceIndex(selected_lyrics)].x[chosenPoints[preferredIndex]]));
 
   // Don't go out of bounds.
   if ((chosenAnnotationIndex === time_blocks.length - 1 && direction == "right") || (chosenAnnotationIndex === 0 && direction == "left")) {
