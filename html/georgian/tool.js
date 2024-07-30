@@ -91,15 +91,17 @@ function splitlines(s) {
  * Loads time blocks for a given voice from a text file.
  * Time blocks represent valid times for annotations.
  * Checks for a save file first.
+ * 
+ * If it fails for some reason, returns an array with `0` as the only element.
  *
  * @param {string} collectionName - The name of the collection of songs.
  * @param {string} songName - The name of the song for which to load time blocks.
  * @param {string} voiceName - The name of the voice (bass, mid, top) for which to load time blocks.
- * @returns {Promise<Array<number>>} A promise that resolves to an array of time blocks as numbers.
+ * @returns {Promise<number[]>} A promise that resolves to an array of time blocks as numbers.
  */
 async function load_time_blocks(collectionName, songName, voiceName) {
   // Determine the file extension based on the voice name
-  let voice_file_extension = get_voice_file_extension(voiceName);
+  let voiceFileExtension = get_voice_file_extension(voiceName);
 
   // The save file, if we find it.
   let saveFile;
@@ -107,14 +109,13 @@ async function load_time_blocks(collectionName, songName, voiceName) {
   // There shouldn't be a save file for None, which sets voiceName to null.
   if (voiceName) {
     // Construct the path to the save file
-    let voice_file_extension = get_voice_file_extension(voiceName);
-    let save_path = "data/syllables/" + collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension + "_save.txt";
+    let pathToSaveFile = "data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_save.txt";
     
     try {
       // Try to find the save file
       saveFile = await $.ajax({
         type: 'GET',
-        url: save_path,
+        url: pathToSaveFile,
         error: function(response) {console.log("Found no save for:\t" + voiceName + "\nReverting to default values.\n");}
       });
     } catch (error) {  
@@ -132,32 +133,38 @@ async function load_time_blocks(collectionName, songName, voiceName) {
 
     
     // Return the read times.
-    let time_blocks = [];
+    let timeBlocksFromSaveFile = [];
     for (let annotation of parsedSaveFile) {
-      time_blocks.push(annotation.time);
+      timeBlocksFromSaveFile.push(annotation.time);
     }
-    return time_blocks;
+    return timeBlocksFromSaveFile;
   }
 
   // Construct the path to the time blocks file
-  let time_blocks_path = "data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voice_file_extension + "_time_blocks.txt";
+  let pathToTimeBlocksFile = "data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_time_blocks.txt";
   
-  // Perform an AJAX GET request to load the time blocks file
-  let time_blocks_file = await $.ajax({
-    url: time_blocks_path,
-    type:'GET',
-    error: function(response) { console.log(response); }
-  });
-  console.log("load_time_blocks() loaded:\n" + time_blocks_file.slice(0, 10));
+  let timeBlocksFromFile;
+  try {
+    // Perform an AJAX GET request to load the time blocks file
+    timeBlocksFromFile = await $.ajax({
+      url: pathToTimeBlocksFile,
+      type:'GET',
+      error: function(response) { console.log(response); }
+    });
 
-  // Split the file content by line breaks and convert each line to a float
-  time_blocks_file = splitlines(time_blocks_file).map(parseFloat);
-  
-  // Log the loaded time blocks for debugging purposes
-  //console.log("load_time_blocks(" + collectionName + ", " + songName + ",  " + voiceName + ") loaded:\n" + time_blocks_file);
+    // Log the loaded time blocks for debugging purposes
+    //console.log("load_time_blocks(" + collectionName + ", " + songName + ",  " + voiceName + ") loaded:\n" + time_blocks_file);
+    console.log("load_time_blocks() loaded:\n" + timeBlocksFromFile.slice(0, 10));
+
+    // Split the file content by line breaks and convert each line to a float
+    timeBlocksFromFile = splitlines(timeBlocksFromFile).map(parseFloat);
+  } catch (error) {
+    timeBlocksFromFile = [0];
+    console.warn(`Failed to load ${pathToTimeBlocksFile}, defaulting to no time blocks.`);
+  }
 
   // Return the array of time blocks
-  return time_blocks_file;
+  return timeBlocksFromFile;
 }
 
 /**
@@ -855,30 +862,38 @@ function get_shifted_time(time, voice) {
 
 /**
  * Loads the syllables for a song from a text file and converts them to an array.
+ * If it fails for some reason, returns an array with an empty string as the only element.
  *
  * @param {string} collectionName - The name of the collection of songs.
  * @param {string} songName - The name of the song for which to load syllables.
- * @returns {Promise<Array<string>>} A promise that resolves to an array of syllables as strings.
+ * @returns {Promise<string[]>} A promise that resolves to an array of syllables as strings.
  */
 async function get_annotation_syllables(collectionName, songName) {
   // Construct the URL to the syllables file
-  let syllables_url = "data/syllables/" + collectionName + "/" + songName + "/syllables.txt";
+  let pathToSyllablesFile = "data/syllables/" + collectionName + "/" + songName + "/syllables.txt";
   
-  // Perform an AJAX GET request to load the syllables file
-  let syllables_file = await $.ajax({
-    url: syllables_url,
-    type: 'GET',
-    error: function(response) { console.log(response); }
-  });
-
-  // Split the file content by spaces to create an array of syllables
-  syllables_file = syllables_file.split(' ');
-  
-  // Log the loaded syllables for debugging purposes
-  console.log("get_annotation_syllables() loaded:\n" + syllables_file);
+  let syllablesFromFile;
+  try {
+    // Perform an AJAX GET request to load the syllables file
+    syllablesFromFile = await $.ajax({
+      url: pathToSyllablesFile,
+      type: 'GET',
+      error: function(response) { console.log(response); }
+    });
+    
+    // Split the file content by spaces to create an array of syllables
+    syllablesFromFile = syllablesFromFile.split(' ');
+    
+    // Log the loaded syllables for debugging purposes
+    console.log("get_annotation_syllables() loaded:\n" + syllablesFromFile);
+  } catch (error) {
+    // Failsafe.
+    syllablesFromFile = [""];
+    console.warn(`Failed to load ${pathToSyllablesFile}, defaulting to no lyrics.`);
+  }
 
   // Return the array of syllables
-  return syllables_file;
+  return syllablesFromFile;
 }
 
 async function get_audio_shift_file(collectionName, songName) {
