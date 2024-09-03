@@ -1,0 +1,246 @@
+/*
+ * Copyright 2013 Google Inc.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+html {
+    height: 100%;
+}
+body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: Overlock, Roboto, Klee One, Annie Use Your Telescope, Verdana, sans-serif;
+    background-color: ivory;
+    text-align: center;
+}
+/*
+ * Header
+ */
+.masthead {
+  margin-bottom: 0.5%;
+}
+
+.masthead-brand {
+  margin-bottom: 0;
+}
+
+.nav-masthead {
+    margin-bottom: 0.25rem;
+}
+.nav-masthead .nav-link {
+  padding: .15rem 0;
+  font-weight: 700;
+  color: #71ccef;
+  background-color: transparent;
+  border-bottom: .25rem solid transparent;
+}
+
+.nav-masthead .nav-link:hover,
+.nav-masthead .nav-link:focus {
+  background-color: sandybrown;
+}
+
+.nav-masthead .nav-link + .nav-link {
+  margin-left: 1rem;
+}
+
+.nav-masthead .active {
+  color: white;
+  background-color: #71ccef;
+}
+
+.title {
+    background-color: sienna;
+    color: white;
+    display: flex;
+    height: 8%;
+    width: 50%;
+    margin: auto;
+    padding: 0.5%;
+    align-items: center;
+    justify-content: center;
+    column-gap: 1em;
+    font-size: 2vw;
+}
+
+.icon {
+    min-width: 1.5em;
+    max-width: 2em;
+}
+
+.sidebar {
+    display: inline-block;
+    float: left;
+    margin: auto;
+    padding: 2%;
+    width: 15%;
+    height: 50%;
+    background-color: sandybrown;
+    color: white;
+    font-size: 1vw;
+}
+
+.main {
+    display: inline-block;
+    float: left;
+    height: 90%;
+    width: 75%;
+    margin: 0;
+    padding: 2%;
+}
+
+#audioPlayer {
+    display: none;
+    margin: auto;
+}
+
+#button-container {
+    display: block
+    margin: auto;
+    padding: 0 0 3% 0;
+}
+
+.plot_button {
+    display: none;
+}
+
+#plot-container {
+    display: block;
+    text-align: center;
+    height: 100%;
+    width: 100%;
+}
+
+#main_plot {
+     display: block;
+     width: 90%;
+     height: 50%;
+     margin: auto;
+     padding: 4%;
+}
+
+#mad_plot {
+     display: block;
+     width: 30%;
+     height: 30%;
+     margin: auto;
+}
+
+.center-fit {
+     max-width: 100%;
+     max-height: 100vh;
+     margin: auto;
+}
+
+.block {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.box {
+  border: .5em solid #E3E9FF;
+  -webkit-box-orient: vertical;
+  -webkit-box-align: center;
+
+  -moz-box-orient: vertical;
+  -moz-box-align: center;
+
+  display: block;
+  box-orient: vertical;
+  box-align: center;
+
+  width: 400px;
+  height: auto;
+
+  margin: auto;
+  padding: 10px;
+  overflow: scroll;
+}
+
+.request {
+  -webkit-box-flex: 1;
+  -moz-box-flex: 1;
+  box-flex: 1;
+}
+
+.result {
+  -webkit-box-flex: 2;
+  -moz-box-flex: 2;
+  box-flex: 2;
+}
+
+header {
+  color:#000;
+  padding:2px 5px;
+  font-size:100%;
+  margin: auto;
+  text-align: center
+}
+
+header h1.logo {
+  margin:6px 0;
+  padding:0;
+  font-size:24px;
+  line-height:20px;
+  text-align: center
+}
+
+.login {
+  font-size: 200%;
+  display: block;
+  margin: auto;
+  cursor: pointer;
+  text-align: center;
+  font-weight: bold;
+  color: #2779AA;
+  line-height: normal;
+}
+
+.logout {
+  font-weight: normal;
+  margin-top: 0;
+}
+
+.shortened {
+  overflow: scroll;
+}
+
+.url {
+  color: #019;
+  font-size: 100%;
+  vertical-align: middle;
+  padding: 1px;
+  background-color: white;
+  border: 1px inset;
+  cursor: auto;
+  margin: 0;
+  text-indent: 0;
+  display: inline-block;
+}
+
+pre.code {
+  padding: 10px;
+  border: .5em solid #E3E9FF;
+  margin: 10px;
+  height: 400px;
+  overflow: scroll;
+}
+
+.warn {
+  color: red;
+}
+
+.api-key {
+  background-color:#DDD;
+}
