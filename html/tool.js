@@ -14,28 +14,18 @@ var selected_lyrics = 0;
 /**
  * Some type definitions for JSDoc which should significantly improve the experience of dealing with this code.
  */
-
-/**
- * @typedef {Object} Annotation - Represents an annotation object within the plot.
- * @property {boolean} showarrow - Determines whether or not the annotation is drawn with an arrow.
- *                                 If "true", `text` is placed near the arrow's tail. If "false", `text` lines up with the `x` and `y` provided.
- * @property {string} text - The text content of the annotation.
- * @property {number} x - The annotation's x position.
- * @property {string} xref - The annotation's x coordinate axis.
- * @property {number} y - The annotation's y position.
- * @property {string} yref - The annotation's y coordinate axis.
- */
-
 /**
  * @todo Replace existing usage of time_blocks and plot.layout.annotations with this structure wherever possible.
  *       Example: When passing arguments to most of our written functions. Reading/writing of saves?
- * @typedef {Object} timeSyllable - Represents a time block and it's annotation within the internal data structure.
- * @property {number} annotationIndex - The annotation's index within the plot.layout.annotations structure.
- *                                      `-1` if no annotation exists at this position.
+ *       - mergeAnnotation()
+ *       - onButtonMergeAnnotation()
+ * @typedef {Object} TimeSyllable - Represents a time block and it's syllable within the internal data structure.
+ * @property {number} syllableIndex - The syllable's index within the original syllable array.
+ *                                      `-1` if no syllable exists at this position.
  * @property {number} timeBlockIndex - The time block's index within the time_blocks structure.
- * @property {string} text - The text content of the annotation.
- *                           `null` if no annotation exists at this position.
- * @property {number} x - The time block's time, which serves as the annotation's x position if it exists.
+ * @property {string} text - The text content of the syllable.
+ *                           Empty string if no syllable exists at this position.
+ * @property {number} x - The time block's time, which serves as the syllable's x position if it exists.
  */
 
 /**
@@ -89,8 +79,7 @@ function splitlines(s) {
 
  /**
  * Loads time blocks for a given voice from a text file.
- * Time blocks represent valid times for annotations.
- * Checks for a save file first.
+ * Time blocks represent valid times for syllables.
  * 
  * If it fails for some reason, returns an array with `0` as the only element.
  *
@@ -102,43 +91,6 @@ function splitlines(s) {
 async function load_time_blocks(collectionName, songName, voiceName) {
   // Determine the file extension based on the voice name
   let voiceFileExtension = get_voice_file_extension(voiceName);
-
-  // The save file, if we find it.
-  let saveFile;
-  
-  // There shouldn't be a save file for None, which sets voiceName to null.
-  if (voiceName) {
-    // Construct the path to the save file
-    let pathToSaveFile = "data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_save.txt";
-    
-    try {
-      // Try to find the save file
-      saveFile = await $.ajax({
-        type: 'GET',
-        url: pathToSaveFile,
-        error: function(response) {console.log("Found no save for:\t" + voiceName + "\nReverting to default values.\n");}
-      });
-    } catch (error) {  
-    }
-  }
-
-  // If the save file exists...
-  if (saveFile) {
-
-    // Parse it...
-    parsedSaveFile = splitlines(saveFile).map(line => {
-      const [time, text] = line.split('\t');
-      return { time: parseFloat(time), text };
-    });
-
-    
-    // Return the read times.
-    let timeBlocksFromSaveFile = [];
-    for (let annotation of parsedSaveFile) {
-      timeBlocksFromSaveFile.push(annotation.time);
-    }
-    return timeBlocksFromSaveFile;
-  }
 
   // Construct the path to the time blocks file
   let pathToTimeBlocksFile = "data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_time_blocks.txt";
@@ -168,170 +120,164 @@ async function load_time_blocks(collectionName, songName, voiceName) {
 }
 
 /**
- * Combines annotations and time blocks into a single data structure.
+ * Combines syllables and time blocks into a single data structure.
  * You should strive to manipulate this structure rather than the plot itself,
  * and then update the plot from your modified structure.
  * 
- * @param {Annotation[]} annotations The annotations as retrieved from `plot.layout.annotations`.
- * @param {number[]} time_blocks The time blocks as retrieved from `plot.data[getLyricsTraceIndex(selected_lyrics)]`.
- * @returns {timeSyllable[]} An array of time blocks and their associated annotations. Refer to the typdef, or this function.
+ * @param {string[]} syllablesFromFile The syllables as retrieved from `getLyricsFromFile()`.
+ * @param {number[]} timeBlocks The time blocks as retrieved from `load_time_blocks()`.
+ * @returns {TimeSyllable[]} An array of time blocks and their associated syllables. Refer to the typdef, or this function.
  */
-function createTimeSyllableStructure(annotations, time_blocks) {
-  // Initialize an array with the same length as time_blocks, filled with objects indicating no annotation
-  let timeSyllables = time_blocks.map((time_block, index) => ({
-    annotationIndex: -1, // No annotation, so index is -1
+function createTimeSyllableStructure(syllablesFromFile, timeBlocks) {
+  // Initialize an array with the same length as time_blocks, filled with objects indicating no syllable
+  let timeSyllables = timeBlocks.map((timeBlock, index) => ({
+    syllableIndex: -1, // No syllable, so index is -1
     timeBlockIndex: index,
-    text: null, // No annotation, so text is null
-    x: time_block
+    text: "", // No syllable, so text is an empty string
+    x: timeBlock
   }));
 
-  // Map each annotation to its corresponding time block
-  annotations.forEach((annotation, index) => {
-    // Find the index of the time block for this annotation
-    let timeSyllableIndex = timeSyllables.findIndex(timeSyllable => timeSyllable.x === annotation.x);
-    // If the annotation falls within a block, map it; otherwise, it's out of bounds
-    if (timeSyllableIndex !== -1) {
-      // Update the structure for the block with this annotation
-      timeSyllables[timeSyllableIndex] = {
-        ...timeSyllables[timeSyllableIndex], // Spread existing properties to retain timeBlockIndex and x
-        annotationIndex: index, // Index in the annotations array
-        text: annotation.text // The text of the annotation
+  for (let index = 0; index < timeSyllables.length; index++) {
+    let syllable = syllablesFromFile[index];
+    if (syllable != null) {
+      timeSyllables[index] = {
+        ...timeSyllables[index],
+        syllableIndex: index,
+        text: syllable
       };
     }
-  });
+  }
 
   return timeSyllables;
 }
 
 /**
- * Updates the annotations on the plot using the TimeSyllables structure.
+ * Updates the lyrics on the plot using the TimeSyllables structure.
  * 
- * @param {timeSyllable[]} timeSyllables The internal data structure containing time blocks and their associated annotations.
+ * @param {TimeSyllable[]} timeSyllables The internal data structure containing time blocks and their associated syllables.
+ * @param {number} lyricsTraceIndex The index of the lyrics trace to update.
  */
-function updateAnnotationsFromTimeSyllables(timeSyllables) {
-  let newAnnotations = [];
+function updateLyricsFromTimeSyllables(timeSyllables, lyricsTraceIndex) {
+  // Package the update
+  let update = {
+    buttontype: 'IGNORE', // Prevent buttonManager() from mistakenly default-casing.
+    x: [timeSyllables.map(timeSyllable => timeSyllable.x)], 
+    text: [timeSyllables.map(timeSyllable => timeSyllable.text)]
+  };
   
-  timeSyllables.forEach((timeSyllable) => {
-    
-    if (timeSyllable.text !== null) {
-      // Create an annotation object for each syllable
-      let syllable = {
-        showarrow: false, // No arrow is displayed for the annotation
-        text: timeSyllable.text, // The syllable text
-        x: timeSyllable.x, //Time block for the syllable
-        xref: 'x',
-        y: 25, // Y-coordinate for the annotation (fixed at 25 for all annotations)
-        yref: 'y'
-      };
-      newAnnotations.push(syllable);
-    }
-  });
-  
-  Plotly.relayout(plot, {annotations: newAnnotations});
+  // Send the update
+  Plotly.restyle(plot, update, lyricsTraceIndex);
 }
 
 /**
- * Moves annotations in the plot based on the selected points and the specified direction.
- * The <direction>most selected annotation is moved to the next valid time block in the direction specified.
- * If the next time block is occupied by another annotation, it moves as well, recursively, until an
+ * Moves syllables in the plot based on the selected points and the specified direction.
+ * The <direction>most selected syllable is moved to the next valid time block in the direction specified.
+ * If the next time block is occupied by another syllable, it moves as well, recursively, until an
  * open space is filled.
  *
  * @param {number[]} chosenPoints - The indices of the selected points in the plot.
- * @param {number[]} time_blocks - The array of valid times for annotations.
- * @param {string} direction - The direction to move the annotations in, either "right" or "left".
- * @param {string} lyrics_trace_name - The name of the trace that contains the lyrics annotations.
+ * @param {TimeSyllable[]} timeSyllables - The internal data structure containing time blocks and their associated syllables.
+ * @param {string} direction - The direction to move the syllables in, either "right" or "left".
  * @returns {boolean} False if anything explicitly prevented the move from happening. True otherwise.
  */
-function shiftAnnotations(chosenPoints, time_blocks, direction, lyrics_trace_name) {
-  // Create a timeSyllable structure for easier manipulation
-  let timeSyllables = createTimeSyllableStructure(plot.layout.annotations, time_blocks);
+function shiftSyllables(chosenPoints, timeSyllables, direction) {
 
-  // Find the index of the selected annotation.
+  // Find the index of the selected syllable.
   let preferredIndex = 0;
   if (direction == "right") {
     preferredIndex = chosenPoints.length - 1
   }
-  let chosenAnnotationIndex = timeSyllables.findIndex((timeSyllable) => (timeSyllable.x == plot.data[getLyricsTraceIndex(selected_lyrics)].x[chosenPoints[preferredIndex]]));
+  let chosenSyllableIndex = timeSyllables.findIndex((timeSyllable) => (timeSyllable.x == plot.data[getLyricsTraceIndex(selected_lyrics)].x[chosenPoints[preferredIndex]]));
 
   // Don't go out of bounds.
-  if ((chosenAnnotationIndex === time_blocks.length - 1 && direction == "right") || (chosenAnnotationIndex === 0 && direction == "left")) {
-    console.warn(`OUT OF BOUNDS CALL:\n\tshiftAnnotations(${chosenPoints}, ${time_blocks}, ${direction}, ${lyrics_trace_name})\n\n\tSELECTED INDEX:\t${chosenAnnotationIndex}`);
+  if ((chosenSyllableIndex === timeSyllables.length - 1 && direction == "right") || (chosenSyllableIndex === 0 && direction == "left")) {
+    console.warn(`OUT OF BOUNDS CALL:\n\tshiftSyllables(${chosenPoints}, ${timeSyllables}, ${direction})\n\n\tSELECTED INDEX:\t${chosenSyllableIndex}`);
     return false;
   }
 
-  // Try to move the chosen annotation
-  let success = moveAnnotationRecursively(chosenAnnotationIndex, timeSyllables, direction);
+  // Try to move the chosen syllable
+  let success = moveSyllableRecursively(chosenSyllableIndex, timeSyllables, direction);
   if (!success) {
     return false;
   }
 
-  // Update the plot with the new annotations
-  updateAnnotationsFromTimeSyllables(timeSyllables);
-  return true;
+  // Try to identify the trace index by name.
+  let thisTraceIndex = getLyricsTraceIndex(selected_lyrics);
+
+  if (thisTraceIndex != -1) {
+    // Update the plot with the new syllables
+    updateLyricsFromTimeSyllables(timeSyllables, thisTraceIndex);
+    return true;
+  } else {
+    console.error(`Couldn't find the index of ${selected_lyrics}!`);
+    return false;
+  }
 }
 
 /**
- * Recursively moves an annotation to the next valid time block in the specified direction.
- * If the target time block is occupied, it moves the existing annotation there recursively
+ * Recursively moves a syllable to the next valid time block in the specified direction.
+ * If the target time block is occupied, it moves the existing syllable there recursively
  * until an unoccupied block is found.
  * 
- * @param {number} targetIndex - The index of the annotation to move within `timeSyllables`.
- * @param {timeSyllable[]} timeSyllables - The array of TimeSyllables, where each TimeSyllable contains information about the annotation and its corresponding time block.
- * @param {string} direction - The direction to move the annotation, either "right" or "left".
+ * @param {number} targetIndex - The index of the syllable to move within `timeSyllables`.
+ * @param {TimeSyllable[]} timeSyllables - The internal data structure containing time blocks and their associated syllables.
+ * @param {string} direction - The direction to move the syllable, either "right" or "left".
  * @returns {boolean} True if the move was successful, false if the move failed (e.g., due to moving out of bounds or other issues).
  */
-function moveAnnotationRecursively(targetIndex, timeSyllables, direction) {
+function moveSyllableRecursively(targetIndex, timeSyllables, direction) {
   // Don't go out of bounds.
   if ((targetIndex >= (timeSyllables.length - 1) && direction == "right") || (targetIndex <= 0 && direction == "left")) {
-    console.warn(`OUT OF BOUNDS CALL:\n\tmoveAnnotationRecursively(${targetIndex}, ${timeSyllables}, ${direction})\n`);
+    console.warn(`OUT OF BOUNDS CALL:\n\tmoveSyllableRecursively(${targetIndex}, ${timeSyllables}, ${direction})\n`);
     return false;
   }
 
   let nextTargetIndex;
   if (direction === "right") {
-    // Find the next time block to the right of the current annotation
+    // Find the next time block to the right of the current syllable
     nextTargetIndex = targetIndex + 1;
   } else if (direction === "left") {
-    // Find the last time block to the left of the current annotation
+    // Find the last time block to the left of the current syllable
     nextTargetIndex = targetIndex - 1;
   }
 
-  // If there's an annotation at the target time block, move it
-  if (timeSyllables[targetIndex].text !== null) {
-    // Try to move the next annotation out of the way. If it's empty, this always succeeds.
-    let success = moveAnnotationRecursively(nextTargetIndex, timeSyllables, direction);
+  // If there's a syllable at the target time block, move it
+  if (timeSyllables[targetIndex].text != "") {
+    // Try to move the next syllable out of the way. If it's empty, this always succeeds.
+    let success = moveSyllableRecursively(nextTargetIndex, timeSyllables, direction);
     if (!success) {
       return false;
     }
     
-    // Move the annotation to the target time block
-    timeSyllables[nextTargetIndex].annotationIndex = timeSyllables[targetIndex].annotationIndex;
+    // Move the syllable to the target time block
+    timeSyllables[nextTargetIndex].syllableIndex = timeSyllables[targetIndex].syllableIndex;
     timeSyllables[nextTargetIndex].text = timeSyllables[targetIndex].text;
-    timeSyllables[targetIndex].annotationIndex = null;
-    timeSyllables[targetIndex].text = null;
+    timeSyllables[targetIndex].syllableIndex = -1;
+    timeSyllables[targetIndex].text = "";
   }
   return true;
 }
 
 /**
- * This function is called when a button to shift annotations in a specific direction is clicked.
- * It moves the selected annotation to the next valid time block in the direction specified by the button,
- * as well as all annotations in that direction if the next time block is occupied.
+ * This function is called when a button to shift syllables in a specific direction is clicked.
+ * It moves the selected syllable to the next valid time block in the direction specified by the button,
+ * as well as all syllables in that direction if the next time block is occupied.
  *
- * @param {string} direction - The direction in which to move the annotations, either "right" or "left".
+ * @param {string} direction - The direction in which to move the syllables, either "right" or "left".
  */
-function onButtonShiftAnnotations(direction) {
+function onButtonShiftSyllables(direction) {
   // Check if any points have been selected
   if (Object.keys(selectedPoints).length > 0) {
     // Determine which time blocks to use based on the selected lyrics
     let timeBlocksTrace = plot.data[getLyricsTraceIndex(selected_lyrics)];
+
+    let allTimeSyllables = [plot.bassTimeSyllables, plot.midTimeSyllables, plot.topTimeSyllables];
     
     // Get all selected points for the current lyrics trace
     let lyricsPoints = [];
     lyricsPoints.push(...selectedPoints[timeBlocksTrace.name]);
 
-    // Call the shiftAnnotations function to move the annotations in the specified direction
-    shiftAnnotations(lyricsPoints, timeBlocksTrace.x, direction, timeBlocksTrace.name);
+    // Call the shiftSyllables function to move the syllables in the specified direction
+    shiftSyllables(lyricsPoints, allTimeSyllables[selected_lyrics - 1], direction);
   }
 }
 
@@ -458,90 +404,7 @@ function onButtonMergeAnnotation(direction) {
 }
 
 /**
- * Loads an array of words and an array of times as annotations, then displays them on the plot.
- * Checks for an existing save file first.
- * 
- * @param {Array<string>} syllables - The array of words (syllables) to be annotated.
- * @param {Array<number>} time_blocks - The array of valid times for the words, corresponding to the syllables.
- * @param {string} voiceName - The name of the voice (bass, mid, top) for which to load annotations.
- */
-async function load_annotations(syllables, time_blocks, voiceName) {
-  // Create an array to hold the syllables and their corresponding time blocks
-  let wordy_array = [];
-
-  // The save file, if we find it.
-  let saveFile;
-  
-  // There shouldn't be a save file for None, which sets voiceName to null.
-  if (voiceName) {
-    // Construct the path to the save file
-    let voice_file_extension = get_voice_file_extension(voiceName);
-    let save_path = "data/syllables/" + collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension + "_save.txt";
-    
-    try {
-      // Try to find the save file
-      saveFile = await $.ajax({
-        type: 'GET',
-        url: save_path,
-        error: function(response) {console.log("Found no save for:\t" + voiceName + "\nReverting to default values.\n");}
-      });
-    } catch (error) {  
-    }
-  }
-
-  // If the save file exists...
-  if (saveFile) {
-
-    // Parse it...
-    parsedSaveFile = splitlines(saveFile).map(line => {
-      const [time, text] = line.split('\t');
-      return { time: parseFloat(time), text };
-    });
-
-    // Push it to the wordy array.
-    for (let annotation of parsedSaveFile) {
-      if (annotation.text != ""){
-        wordy_array.push([annotation.text, annotation.time]);
-      }
-    }
-
-  // Else...  
-  } else {
-    // Construct the default wordy array.
-    for (let syllableIndex = 0; syllableIndex < syllables.length; syllableIndex++) {
-      wordy_array.push([syllables[syllableIndex], time_blocks[syllableIndex]])
-    }
-  }
-
-  // Prepare the update object for the annotations
-  let update_words = {
-    annotations: []
-  }
-
-  // Iterate over the wordy_array to create annotation objects
-  for (let word in wordy_array) {
-    // Create an annotation object for each syllable
-    let a_word = {
-      showarrow: false, // No arrow is displayed for the annotation
-      text: wordy_array[word][0], // The syllable text
-      x: wordy_array[word][1], //Time block for the syllable
-      xref: 'x',
-      y: 25, // Y-coordinate for the annotation (fixed at 25 for all annotations)
-      yref: 'y'
-    };
-
-    // Append the annotation object to the update_words object
-    update_words.annotations.push(a_word);
-  }
-
-  // Update the plot with the new annotations
-  Plotly.relayout(plot, update_words);
-}
-
-/**
- * Updates the annotations displayed on the plot based on the selected lyrics option.
- * This function is called when the active lyrics option in the dropdown menu changes.
- * It loads the annotations for the selected lyrics and updates the plot accordingly.
+ * Updates the `selected_lyrics` global variable.
  */
 async function update_selected_lyrics() {
   // Get the active lyrics option from the plot layout
@@ -549,17 +412,6 @@ async function update_selected_lyrics() {
 
   // Log the active lyrics option for debugging purposes
   console.log("Active Lyrics set to:", selected_lyrics);
-
-  // Load and display annotations based on the selected lyrics option
-  if (selected_lyrics == 0) {
-    await load_annotations([""], [0], null);
-  } else if (selected_lyrics == 1) {
-    await load_annotations(plot.bass_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "bass");
-  } else if (selected_lyrics == 2) {
-    await load_annotations(plot.mid_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "mid");
-  } else if (selected_lyrics ==3) {
-    await load_annotations(plot.top_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "top");
-  }
 }
 
 
@@ -621,6 +473,72 @@ function on_button_delete() {
 }
 
 /**
+ * Attempts to read the save file for the designated song/voice.
+ * Returns the save parsed as an array of TimeSyllables if successful.
+ * 
+ * @param {string} collectionName The name of the collection of songs.
+ * @param {string} songName The name of the song for which to load syllables.
+ * @param {string} voiceName The name of the voice (bass, mid, top) for which to load time blocks.
+ * @returns {TimeSyllable[]} An array of time blocks and their associated syllables. Refer to the typdef, or this function.
+ * 
+ * @throws An exception if the save doesn't exist or otherwise failed to be loaded and parsed.
+ */
+async function readSave(collectionName, songName, voiceName) {
+  // Determine the file extension based on the voice name
+  let voiceFileExtension = get_voice_file_extension(voiceName);
+
+  // The save file, if we find it.
+  let saveFile;
+  
+  // Construct the path to the save file
+  let pathToSaveFile = "data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_save.txt";
+  
+  // Try to find the save file
+  saveFile = await $.ajax({
+    type: 'GET',
+    url: pathToSaveFile,
+    error: function(response) {console.log("Found no save for:\t" + voiceName + "\nReverting to default values.\n");}
+  });
+  
+  // Parse it...
+  parsedSaveFile = splitlines(saveFile).map(line => {
+    const [time, text] = line.split('\t');
+    return { time: parseFloat(time), text };
+  });
+  
+  // Return the read times.
+  let timeBlocksFromSaveFile = [];
+  let syllablesFromSaveFile = [];
+  for (let saveChunk of parsedSaveFile) {
+    timeBlocksFromSaveFile.push(saveChunk.time);
+    syllablesFromSaveFile.push(saveChunk.text);
+  }
+  
+  // Initialize an array with the same length as time_blocks, filled with objects indicating no syllable
+  let timeSyllables = timeBlocksFromSaveFile.map((timeBlock, index) => ({
+    syllableIndex: -1, // No syllable, so index is -1
+    timeBlockIndex: index,
+    text: "", // No syllable, so text is an empty string
+    x: timeBlock
+  }));
+  
+  // Add in the syllables
+  for (let index = 0; index < timeSyllables.length; index ++) {
+    let syllable = syllablesFromSaveFile[index];
+    if (syllable != "") {
+      timeSyllables[index] = {
+        ...timeSyllables[index],
+        syllableIndex: index,
+        text: syllable
+      };
+    }
+  }
+  
+  // Return the read save
+  return timeSyllables;
+}
+
+/**
  * Attempts to write the currently selected lyrics position and points to a
  * server-side save file. Depends on save.php.
  */
@@ -644,22 +562,16 @@ async function writeSave() {
   // Extract time blocks from the lyrics trace
   let time_blocks = plot.data[getLyricsTraceIndex(selected_lyrics)].x;
 
-  // Extract annotations for the current trace
-  let annotations = plot.layout.annotations;
+  // Extract syllables for the current trace
+  let syllables = plot.data[getLyricsTraceIndex(selected_lyrics)].text;
 
-  // Create a map of annotations for quick lookup by time block
-  let annotationMap = new Map();
-  annotations.forEach(annotation => {
-    annotationMap.set(annotation.x, annotation.text);
+  // Iterate through time blocks and pair each with its syllable text or an empty string if no syllable exists
+  let saveData = time_blocks.map((time, index) => {
+    let syllable = syllables[index];
+    return [time, syllable];
   });
 
-  // Iterate through time blocks and pair each with its annotation text or an empty string if no annotation exists
-  let saveData = time_blocks.map(time => {
-    let annotationText = annotationMap.has(time) ? annotationMap.get(time) : "";
-    return [time, annotationText];
-  });
-
-  // At this point, saveData contains pairs of [time, annotationText]
+  // At this point, saveData contains pairs of [time, syllable]
   // Converting saveData to a string to write to a file
   let saveDataString = saveData.map(pair => pair.join('\t')).join('\n');
   
@@ -777,6 +689,17 @@ function buttonManager(eventData) {
       addAveragePointToLyricsTrace();
       break;
     
+    case 'shiftLeft':
+      onButtonShiftSyllables('left');
+      break;
+    
+    case 'shiftRight':
+      onButtonShiftSyllables('right');
+      break;
+    
+    case 'IGNORE':
+      break;
+    
     default:
       console.warn("An unrecognized button called plotly_restlye! Found button:\t" + eventData[0].buttontype + "\n");
   }
@@ -861,14 +784,14 @@ function get_shifted_time(time, voice) {
 }
 
 /**
- * Loads the syllables for a song from a text file and converts them to an array.
+ * Loads the lyrics for a song from a text file as an array of syllables (strings).
  * If it fails for some reason, returns an array with an empty string as the only element.
  *
  * @param {string} collectionName - The name of the collection of songs.
  * @param {string} songName - The name of the song for which to load syllables.
  * @returns {Promise<string[]>} A promise that resolves to an array of syllables as strings.
  */
-async function get_annotation_syllables(collectionName, songName) {
+async function getLyricsFromFile(collectionName, songName) {
   // Construct the URL to the syllables file
   let pathToSyllablesFile = "data/syllables/" + collectionName + "/" + songName + "/syllables.txt";
   
@@ -885,7 +808,7 @@ async function get_annotation_syllables(collectionName, songName) {
     syllablesFromFile = syllablesFromFile.split(' ');
     
     // Log the loaded syllables for debugging purposes
-    console.log("get_annotation_syllables() loaded:\n" + syllablesFromFile);
+    console.log(`getLyricsFromFile(${collectionName}, ${songName}) loaded:\n${syllablesFromFile}`);
   } catch (error) {
     // Failsafe.
     syllablesFromFile = [""];
@@ -1007,20 +930,26 @@ async function update_plot(collectionName, songName, voiceName) {
     return false
   }
 
-  plot.bass_syllables = await get_annotation_syllables(collectionName, songName);
-  let bass_time_blocks_initial = await load_time_blocks(collectionName, songName, "bass");
+  try {
+    plot.bassTimeSyllables =  await readSave(collectionName, songName, "bass");
+  } catch (error) {
+    plot.bassTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "bass"));
+  }
+
   var bass_data = await get_voice(collectionName, songName, "bass");
 
-  var bass_annotation_trace = {
-    x: bass_time_blocks_initial,
-    y: bass_time_blocks_initial.map(() => 25),
-    mode: 'markers',
+  var bassLyricsTrace = {
+    x: plot.bassTimeSyllables.map(timeSyllable => timeSyllable.x),
+    y: plot.bassTimeSyllables.map(() => 25),
+    textposition: 'middle center',
+    text: plot.bassTimeSyllables.map(timeSyllable => timeSyllable.text),
+    mode: 'markers+text',
     name: 'Bass lyrics',
     visible: false,
     showlegend: false,
     type: 'scattergl',
-    opacity: 0.1,
     marker: {
+      opacity: 0.1,
       color: 'red', // Doesn't really matter what color I use... but eh!
       size: 10, // I need to see!!!
     }
@@ -1067,20 +996,26 @@ async function update_plot(collectionName, songName, voiceName) {
     }
   };
 
-  plot.mid_syllables = await get_annotation_syllables(collectionName, songName);
-  let mid_time_blocks_initial = await load_time_blocks(collectionName, songName, "mid");
+  try {
+    plot.midTimeSyllables =  await readSave(collectionName, songName, "mid");
+  } catch (error) {
+    plot.midTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "mid"));
+  }
+
   var mid_data = await get_voice(collectionName, songName, "mid");
 
-  var mid_annotation_trace = {
-    x: mid_time_blocks_initial,
-    y: mid_time_blocks_initial.map(() => 25),
-    mode: 'markers',
+  var midLyricsTrace = {
+    x: plot.midTimeSyllables.map(timeSyllable => timeSyllable.x),
+    y: plot.midTimeSyllables.map(() => 25),
+    textposition: 'middle center',
+    text: plot.midTimeSyllables.map(timeSyllable => timeSyllable.text),
+    mode: 'markers+text',
     name: 'Middle lyrics',
     visible: false,
     showlegend: false,
     type: 'scattergl',
-    opacity: 0.1,
     marker: {
+      opacity: 0.1,
       color: 'blue', // Doesn't really matter what color I use... but eh!
       size: 10, // I need to see!!!
     }
@@ -1127,20 +1062,26 @@ async function update_plot(collectionName, songName, voiceName) {
     }
   };
 
-  plot.top_syllables = await get_annotation_syllables(collectionName, songName); 
-  let top_time_blocks_initial = await load_time_blocks(collectionName, songName, "top");
+  try {
+    plot.topTimeSyllables =  await readSave(collectionName, songName, "top");
+  } catch (error) {
+    plot.topTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "top"));
+  }
+
   var top_data = await get_voice(collectionName, songName, "top");
 
-  var top_annotation_trace = {
-    x: top_time_blocks_initial,
-    y: top_time_blocks_initial.map(() => 25),
-    mode: 'markers',
+  var topLyricsTrace = {
+    x: plot.topTimeSyllables.map(timeSyllable => timeSyllable.x),
+    y: plot.topTimeSyllables.map(() => 25),
+    textposition: 'middle center',
+    text: plot.topTimeSyllables.map(timeSyllable => timeSyllable.text),
+    mode: 'markers+text',
     name: 'Top lyrics',
     visible: false,
     showlegend: false,
     type: 'scattergl',
-    opacity: 0.1,
     marker: {
+      opacity: 0.1,
       color: 'green', // Doesn't really matter what color I use... but eh!
       size: 10, // I need to see!!!
     }
@@ -1222,7 +1163,7 @@ async function update_plot(collectionName, songName, voiceName) {
 
   // console.log(top_data);
 
-  var data = [bass_trace, bass_annotation_trace, bass_mad_high_trace, bass_mad_low_trace, mid_trace, mid_annotation_trace, mid_mad_low_trace, mid_mad_high_trace, top_trace, top_annotation_trace, top_mad_low_trace, top_mad_high_trace];
+  var data = [bass_trace, bassLyricsTrace, bass_mad_high_trace, bass_mad_low_trace, mid_trace, midLyricsTrace, mid_mad_low_trace, mid_mad_high_trace, top_trace, topLyricsTrace, top_mad_low_trace, top_mad_high_trace];
   var data2 = [histogram_mid_trace, histogram_bass_trace, histogram_top_trace];
 
   var layout = {
@@ -1230,22 +1171,22 @@ async function update_plot(collectionName, songName, voiceName) {
       {
         buttons: [
           {
-            args: [{'buttontype': 'lyrics', 'visible': [false, false, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            args: [{'buttontype': 'lyrics', 'visible': [false, false, false]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (None)',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'lyrics', 'visible': [true, false, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            args: [{'buttontype': 'lyrics', 'visible': [true, false, false]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (Bass)',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'lyrics', 'visible': [false, true, false]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            args: [{'buttontype': 'lyrics', 'visible': [false, true, false]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (Middle)',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'lyrics', 'visible': [false, false, true]}, [1, 5, 9]], // Indices of bass_annotation_trace, mid_annotation_trace, top_annotation_trace
+            args: [{'buttontype': 'lyrics', 'visible': [false, false, true]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (Top)',
             method: 'restyle'
           }
@@ -1272,6 +1213,25 @@ async function update_plot(collectionName, songName, voiceName) {
         yanchor: 'top',
         y: 1,
         direction: 'down',
+        type: 'buttons',
+      },
+      {
+        buttons: [
+          {
+            args: [{'buttontype': 'shiftLeft'}], 
+            label: '<== Shift Words Left',
+            method: 'restyle'
+          },
+          {
+            args: [{'buttontype': 'shiftRight'}], 
+            label: 'Shift Words Right ==>',
+            method: 'restyle'
+          }
+        ],
+        yanchor: 'bottom',
+        y: -0.2,
+        xanchor: 'auto',
+        direction: 'right',
         type: 'buttons',
       }
     ],
@@ -1324,16 +1284,6 @@ async function update_plot(collectionName, songName, voiceName) {
 
   plot.on("plotly_selected", selection_fn)
   plot.on("plotly_restyle", buttonManager)
-
-  if (selected_lyrics == 0) {
-    await load_annotations([""], [0], null);
-  } else if (selected_lyrics == 1) {
-    await load_annotations(plot.bass_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "bass");
-  } else if (selected_lyrics == 2) {
-    await load_annotations(plot.mid_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "mid");
-  } else if (selected_lyrics ==3) {
-    await load_annotations(plot.top_syllables, plot.data[getLyricsTraceIndex(selected_lyrics)].x, "top");
-  }
 }
 
 $( document ).ready(function() {
