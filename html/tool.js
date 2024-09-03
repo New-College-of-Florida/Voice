@@ -1,8 +1,8 @@
 
 const audio_player = document.querySelector('audio');
 const selectedPoints = {};
-var plot = document.getElementById('plot');
-var plot2 = document.getElementById('plot2');
+var plot = document.getElementById('main_plot');
+var plot2 = document.getElementById('mad_plot');
 var audio_timer = null;
 var audio_shifts = null;
 var first_sounds = null;
@@ -93,7 +93,7 @@ async function load_time_blocks(collectionName, songName, voiceName) {
   let voiceFileExtension = get_voice_file_extension(voiceName);
 
   // Construct the path to the time blocks file
-  let pathToTimeBlocksFile = "data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_time_blocks.txt";
+  let pathToTimeBlocksFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_time_blocks.txt";
   
   let timeBlocksFromFile;
   try {
@@ -491,7 +491,7 @@ async function readSave(collectionName, songName, voiceName) {
   let saveFile;
   
   // Construct the path to the save file
-  let pathToSaveFile = "data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_save.txt";
+  let pathToSaveFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_save.txt";
   
   // Try to find the save file
   saveFile = await $.ajax({
@@ -793,7 +793,7 @@ function get_shifted_time(time, voice) {
  */
 async function getLyricsFromFile(collectionName, songName) {
   // Construct the URL to the syllables file
-  let pathToSyllablesFile = "data/syllables/" + collectionName + "/" + songName + "/syllables.txt";
+  let pathToSyllablesFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/syllables.txt";
   
   let syllablesFromFile;
   try {
@@ -822,7 +822,7 @@ async function getLyricsFromFile(collectionName, songName) {
 async function get_audio_shift_file(collectionName, songName) {
   /*
   audio_shift_file = await $.ajax({
-    url:"data/ground-estimate/" + collectionName + "/" + songName + "/shifts.txt",
+    url:"georgian/data/ground-estimate/" + collectionName + "/" + songName + "/shifts.txt",
     type:'GET'
   });
   voices = splitlines(audio_shift_file)
@@ -838,7 +838,7 @@ async function get_audio_shift_file(collectionName, songName) {
   */
   first_sounds = [];
   first_sounds_file = await $.ajax({
-    url:"data/ground-estimate/" + collectionName + "/" + songName + "/first_sounds.txt",
+    url:"georgian/data/ground-estimate/" + collectionName + "/" + songName + "/first_sounds.txt",
     type:'GET'
   });
   first_sounds_file = first_sounds_file.split(' ');
@@ -850,13 +850,13 @@ async function get_audio_shift_file(collectionName, songName) {
 function get_file(collectionName, songName, voice, mad = false) {
   if(mad) {
     return $.ajax({
-      url:"data/ground-estimate-statistics/mad/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
+      url:"georgian/data/ground-estimate-statistics/mad/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
       type:'GET'
     });
   } else {
-    console.log("data/ground-estimate/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt");
+    console.log("georgian/data/ground-estimate/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt");
     return $.ajax({
-        url:"data/ground-estimate/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
+        url:"georgian/data/ground-estimate/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
         type:'GET'
       });
   }
@@ -924,7 +924,33 @@ function generate_mad(x1, y1, y2) {
 	return [ans_x, ans_y];
  }
 
+function changeVisibility(eltviz, viz_override = "") {
+    for (let eltname in eltviz) {
+	let elt = document.getElementById(eltname);
+	if (viz_override != "") {
+	    elt.style.display = viz_override;
+	}
+	else {
+	    elt.style.display = eltviz[eltname];
+	}
+	console.log("Element " + eltname + ": " + elt + ", viz: " + eltviz[eltname]);
+    }
+}
+
 async function update_plot(collectionName, songName, voiceName) {
+    var visible_elts = {"audioPlayer":"block",
+			"shift_words_left_button":"inline",
+			"shift_words_right_button":"inline",
+			"merge_word_left_button":"inline",
+			"merge_word_right_button":"inline"
+		       };
+    if(collection_name == null || song_name == null || voice_name == null) {
+	changeVisibility(visible_elts, "none");
+	return false
+    }
+    else {
+	changeVisibility(visible_elts);	
+    }
 
   if(collection_name == null || song_name == null || voice_name == null) {
     return false
@@ -1256,14 +1282,12 @@ async function update_plot(collectionName, songName, voiceName) {
             width: 0
         }
     }],
-    width: 900, 
-    height: 500, 
+    autosize: true,
     title: songName
   } 
 
   var layout2 = {
-	width: 500,
-	height: 500,
+        autosize: true,  
 	title: songName + "'s MAD Histogram",
 	xaxis: {
 		range: [0,10],
@@ -1280,7 +1304,7 @@ async function update_plot(collectionName, songName, voiceName) {
     songNameLast = songName;
   }
 
-  $("#audioPlayer").attr("src", "data/" + collectionName + "/" + songName + "/" + songNameLast + ".mp3");
+  $("#audioPlayer").attr("src", "georgian/data/" + collectionName + "/" + songName + "/" + songNameLast + ".mp3");
 
   plot.on("plotly_selected", selection_fn)
   plot.on("plotly_restyle", buttonManager)
@@ -1300,19 +1324,26 @@ $( document ).ready(function() {
 //// Input handling
 
 $( "#collectionName" ).change(function() {
-  collection_name = $("#collectionName").val();
+    collection_name = $("#collectionName").val();
+    if (collection_name == "") {
+	collection_name = null;
+    }
   $("#songNameRow").show();
   $('#songName').html("");
   $('<option/>').val('').html('').appendTo('#songName');
+  console.log("In tool.js, collection changed, main_plot: " + plot + "\n");
   console.log(collectionDirectories[collection_name]);
-  for (const song of collectionDirectories[collection_name]){
-     $('<option/>').val(song).html(song).appendTo('#songName');
-  }
-  update_plot(collection_name, song_name, voice_name);
+    if (collection_name != null) {
+	for (const song of collectionDirectories[collection_name]){
+	    $('<option/>').val(song).html(song).appendTo('#songName');
+	    console.log(song);
+	}
+    }
+    update_plot(collection_name, song_name, voice_name)
 });
 
 $( "#songName" ).change(function() {
-  song_name = $("#songName").val();
+    song_name = $("#songName").val();
   $("#voiceNameRow").show();
   update_plot(collection_name, song_name, voice_name);
 });
