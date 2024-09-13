@@ -11,11 +11,11 @@ Attempts to perform some level of input validation before writing the save data 
 save file.
 */
 <?php
-debug_to_console("[save.php]");
+debug_to_console("[save_time_syllables.php]");
 
 if (!empty($_POST['data'])) {
 	$saveData = test_input($_POST['data']);
-	$savePath = "data/syllables/" . htmlspecialchars($_POST['path']) . "_save.txt";
+	$savePath = "georgian/data/syllables/" . htmlspecialchars($_POST['path']) . "_time_syllables.txt";
 }
 
 $saveFile = fopen($savePath, 'w');

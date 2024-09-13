@@ -11,6 +11,15 @@ var song_name = null;
 var voice_name = null;
 var selected_lyrics = 0;
 
+/* Screen elements*/
+var visible_elts = {"audioPlayer":"block",
+		    "shift_words_left_button":"inline",
+		    "shift_words_right_button":"inline",
+		    "merge_word_left_button":"inline",
+		    "merge_word_right_button":"inline"
+		   };
+
+
 /**
  * Some type definitions for JSDoc which should significantly improve the experience of dealing with this code.
  */
@@ -483,7 +492,7 @@ function on_button_delete() {
  * 
  * @throws An exception if the save doesn't exist or otherwise failed to be loaded and parsed.
  */
-async function readSave(collectionName, songName, voiceName) {
+async function readTimeSyllables(collectionName, songName, voiceName) {
   // Determine the file extension based on the voice name
   let voiceFileExtension = get_voice_file_extension(voiceName);
 
@@ -540,9 +549,9 @@ async function readSave(collectionName, songName, voiceName) {
 
 /**
  * Attempts to write the currently selected lyrics position and points to a
- * server-side save file. Depends on save.php.
+ * server-side save file. Depends on save_time_syllables.php.
  */
-async function writeSave() {
+async function writeTimeSyllables() {
   // No changing "None".
   if (selected_lyrics == 0) {
     console.log("You aren't supposed to try to edit the None option.");
@@ -586,7 +595,7 @@ async function writeSave() {
   data.append("data", saveDataString);
   data.append("path", save_path)
   let xhr = new XMLHttpRequest();
-  xhr.open( 'post', 'save.php', true );
+  xhr.open( 'post', 'save_time_syllables.php', true );
 
   // https://fetch.spec.whatwg.org/#typedefdef-xmlhttprequestbodyinit:
   // - safely extracting a FormData ensures that the ContentType is multipart/form-data.
@@ -682,7 +691,7 @@ function buttonManager(eventData) {
       break;
 
     case 'save':
-      writeSave();
+      writeTimeSyllables();
       break;
     
     case 'addTime':
@@ -862,6 +871,7 @@ function get_file(collectionName, songName, voice, mad = false) {
   }
 }
 
+// Duplicate of function in sessionScribe.php
 function get_voice_file_extension(voiceName) {
   voice = null;
   if(voiceName == "bass") {
@@ -937,27 +947,14 @@ function changeVisibility(eltviz, viz_override = "") {
     }
 }
 
+/* To be called when collection_name, song_name, and voice_name have values */
 async function update_plot(collectionName, songName, voiceName) {
-    var visible_elts = {"audioPlayer":"block",
-			"shift_words_left_button":"inline",
-			"shift_words_right_button":"inline",
-			"merge_word_left_button":"inline",
-			"merge_word_right_button":"inline"
-		       };
-    if(collection_name == null || song_name == null || voice_name == null) {
-	changeVisibility(visible_elts, "none");
-	return false
-    }
-    else {
-	changeVisibility(visible_elts);	
-    }
-
   if(collection_name == null || song_name == null || voice_name == null) {
-    return false
+      return false
   }
 
   try {
-    plot.bassTimeSyllables =  await readSave(collectionName, songName, "bass");
+    plot.bassTimeSyllables =  await readTimeSyllables(collectionName, songName, "bass");
   } catch (error) {
     plot.bassTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "bass"));
   }
@@ -1023,7 +1020,7 @@ async function update_plot(collectionName, songName, voiceName) {
   };
 
   try {
-    plot.midTimeSyllables =  await readSave(collectionName, songName, "mid");
+    plot.midTimeSyllables =  await readTimeSyllables(collectionName, songName, "mid");
   } catch (error) {
     plot.midTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "mid"));
   }
@@ -1089,7 +1086,7 @@ async function update_plot(collectionName, songName, voiceName) {
   };
 
   try {
-    plot.topTimeSyllables =  await readSave(collectionName, songName, "top");
+    plot.topTimeSyllables =  await readTimeSyllables(collectionName, songName, "top");
   } catch (error) {
     plot.topTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "top"));
   }
@@ -1320,6 +1317,50 @@ $( document ).ready(function() {
     });
 });
 
+/* Enables lyrics file upload selector and populates voice options for selector
+ * To be called when collection_name, song_name, and voice_name have values
+ */
+function enableLyricsUpload(voices) {
+    if(collection_name != null && song_name != null && voice_name != null && count(voices) > 0) {
+	document.getElementById('uploadLyrics').disabled = false;
+	for (const voice of voices){
+	    $('<option/>').val(voice).html(voice).appendTo('#uploadLyrics');
+	    console.log(voice);
+	}
+    }
+}
+
+/* Calls php script to
+ * - set session variables from inputs
+ * - return available voices
+ */
+
+/* Calls php script to get list of voice options for selector
+ * To be called when collection_name, song_name, and voice_name have values
+ */
+// From https://stackoverflow.com/questions/18741554/maintain-selected-dropdown-values-across-multiple-pages-in-php
+async function getVoicesNeedingLyrics(collectionName, songName, voiceName) {
+    document.getElementById("uploadLyricsButton").disabled = true;
+    $.ajax({
+        url: 'voices_needing_lyrics.php',
+        type: 'POST',
+        data: {
+            'collectionName' : collection_name,
+	    'songName' : song_name,
+	    'voiceName' : voice_name
+        }
+    });
+}
+
+function updateScreen() {
+    if(collection_name != null && song_name != null && voice_name != null && count(voices) > 0) {
+	getVoicesNeedingLyrics(collection_name, song_name, voice_name).done(enableLyricsUpload);
+	update_plot(collection_name, song_name, voice_name);
+	changeVisibility(visible_elts);
+    } else {
+	changeVisibility(visible_elts, "none");
+    }
+}
 
 //// Input handling
 
@@ -1339,16 +1380,29 @@ $( "#collectionName" ).change(function() {
 	    console.log(song);
 	}
     }
-    update_plot(collection_name, song_name, voice_name)
+    updateScreen();
 });
 
 $( "#songName" ).change(function() {
     song_name = $("#songName").val();
-  $("#voiceNameRow").show();
-  update_plot(collection_name, song_name, voice_name);
+    $("#voiceNameRow").show();
+    updateScreen();
 });
 
 $( "#voiceName" ).change(function() {
-  voice_name = $("#voiceName").val();
-  update_plot(collection_name, song_name, voice_name);
+    voice_name = $("#voiceName").val();
+    updateScreen();
 });
+
+$( "#uploadLyrics" ).change(function() {
+    $.ajax({
+        url: 'upload_lyrics.php',
+        type: 'POST',
+        data: {
+            'voiceName' : $("#uploadLyrics").val()
+        }
+    });
+});
+
+
+

@@ -1,12 +1,19 @@
 <?php
+ob_start();
 require_once __DIR__.'/vendor/autoload.php';
 
 session_start();
 
 /* No need to set Oauth2 parameters and instantiate client here,
  * because we are only using the access_token to confirm authentication
+ * 
+ * If this is a dev site we aren't using the access token at all.
  */
-$home_uri = 'https://' . $_SERVER['HTTP_HOST']; 
+$home_uri = 'https://' . $_SERVER['HTTP_HOST'];
+var $dev_site = (substr($_SERVER['HTTP_HOST'], -30, 30) != 'teachyourselfgeorgiansongs.org');
+if ($dev_site) {
+    $_SESSION['access_token'] = 'dev site: no access token needed';
+}
 
 /* delegate Oauth2 user authentication*/
 if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
@@ -24,7 +31,7 @@ if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
 
 	<link rel="icon" href="favicon.png" type="image/png"/>
         <title>Teach Yourself Georgian Songs</title>
-	<link rel="canonical" href="https://teachyourselfgeorgiansongs.org">
+	<link rel="canonical" href="https://www.teachyourselfgeorgiansongs.org">
 
 	<!-- Bootstrap core CSS -->
 	<link href="dist/css/bootstrap.min.css" rel="stylesheet">
@@ -69,10 +76,11 @@ if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
                 <option value='mixed'>Mixed</option>
                 <option value='bass'>Bass</option>
                 <option value='mid'>Mid</option>
-                <option value='top'>Top</option>
-                
+                <option value='top'>Top</option>                
               </select>
             </div>
+            <label for="uploadLyrics"> Upload Lyrics For A Voice</label>
+	    <select id="uploadLyrics" class="form-control" disabled=true>
 	</div>
 	<div id="main" class="main">
 	  <div id="plot-container">
@@ -102,7 +110,11 @@ if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
       <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
       <script src="assets/js/vendor/popper.min.js"></script>
       <script src="dist/js/bootstrap.min.js"></script>
+      <script src="utils.js?v=1"></script>
       <script src="tool.js?v=1"></script>
     </body>
 </html>
 
+<?php
+ob_end_flush();
+?>
