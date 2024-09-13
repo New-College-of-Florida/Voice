@@ -9,10 +9,12 @@ var first_sounds = null;
 var collection_name = null;
 var song_name = null;
 var voice_name = null;
+var lyrics_voice_name = null;
 var selected_lyrics = 0;
 
 /* Screen elements*/
-var visible_elts = {"audioPlayer":"block",
+var visible_elts = {"uploadLyricsForm":"block",
+		    "audioPlayer":"block",
 		    "shift_words_left_button":"inline",
 		    "shift_words_right_button":"inline",
 		    "merge_word_left_button":"inline",
@@ -493,6 +495,7 @@ function on_button_delete() {
  * @throws An exception if the save doesn't exist or otherwise failed to be loaded and parsed.
  */
 async function readTimeSyllables(collectionName, songName, voiceName) {
+    console.log('[readTimeSyllables]' + collectionName + ' - ' + songName + ' - ' + voiceName );
   // Determine the file extension based on the voice name
   let voiceFileExtension = get_voice_file_extension(voiceName);
 
@@ -935,6 +938,7 @@ function generate_mad(x1, y1, y2) {
  }
 
 function changeVisibility(eltviz, viz_override = "") {
+    console.log('[changeVisibility]');
     for (let eltname in eltviz) {
 	let elt = document.getElementById(eltname);
 	if (viz_override != "") {
@@ -943,12 +947,12 @@ function changeVisibility(eltviz, viz_override = "") {
 	else {
 	    elt.style.display = eltviz[eltname];
 	}
-	console.log("Element " + eltname + ": " + elt + ", viz: " + eltviz[eltname]);
     }
 }
 
 /* To be called when collection_name, song_name, and voice_name have values */
 async function update_plot(collectionName, songName, voiceName) {
+  console.log("[update_plot]");
   if(collection_name == null || song_name == null || voice_name == null) {
       return false
   }
@@ -1321,10 +1325,12 @@ $( document ).ready(function() {
  * To be called when collection_name, song_name, and voice_name have values
  */
 function enableLyricsUpload(voices) {
-    if(collection_name != null && song_name != null && voice_name != null && count(voices) > 0) {
+    if(collection_name != null && song_name != null && voice_name != null && voices.length > 0) {
+	console.log('[enableLyricsUpload]');
 	document.getElementById('uploadLyrics').disabled = false;
+	$('<option/>').val('').html('').appendTo('#uploadLyrics');
 	for (const voice of voices){
-	    $('<option/>').val(voice).html(voice).appendTo('#uploadLyrics');
+	    $('<option/>').val(get_voice_name(voice)).html(get_voice_name(voice)).appendTo('#uploadLyrics');
 	    console.log(voice);
 	}
     }
@@ -1340,21 +1346,30 @@ function enableLyricsUpload(voices) {
  */
 // From https://stackoverflow.com/questions/18741554/maintain-selected-dropdown-values-across-multiple-pages-in-php
 async function getVoicesNeedingLyrics(collectionName, songName, voiceName) {
-    document.getElementById("uploadLyricsButton").disabled = true;
+    console.log('[getVoicesNeedingLyrics]');
+    document.getElementById("uploadLyrics").disabled = true;
+    console.log('calling [voices_needing_lyrics.php]');
     $.ajax({
         url: 'voices_needing_lyrics.php',
         type: 'POST',
+	dataType: "json",
         data: {
             'collectionName' : collection_name,
 	    'songName' : song_name,
 	    'voiceName' : voice_name
-        }
+        },
+	success: function(response) {
+	    enableLyricsUpload(response);
+	}
     });
 }
 
 function updateScreen() {
-    if(collection_name != null && song_name != null && voice_name != null && count(voices) > 0) {
-	getVoicesNeedingLyrics(collection_name, song_name, voice_name).done(enableLyricsUpload);
+    console.log("[updateScreen]");
+    $( "#uploadLyrics" ).html("");
+    document.getElementById('uploadLyrics').disabled = true;
+    if(collection_name != null && song_name != null && voice_name != null) {
+	getVoicesNeedingLyrics(collection_name, song_name, voice_name);
 	update_plot(collection_name, song_name, voice_name);
 	changeVisibility(visible_elts);
     } else {
@@ -1385,24 +1400,54 @@ $( "#collectionName" ).change(function() {
 
 $( "#songName" ).change(function() {
     song_name = $("#songName").val();
+    if (song_name == "") {
+	song_name = null;
+    }
     $("#voiceNameRow").show();
     updateScreen();
 });
 
 $( "#voiceName" ).change(function() {
     voice_name = $("#voiceName").val();
+    if (voice_name == "") {
+	voice_name = null;
+    }
     updateScreen();
 });
 
 $( "#uploadLyrics" ).change(function() {
-    $.ajax({
-        url: 'upload_lyrics.php',
-        type: 'POST',
-        data: {
-            'voiceName' : $("#uploadLyrics").val()
-        }
-    });
+    lyrics_voice_name = $("#uploadLyrics").val();
+    if (lyrics_voice_name == "") {
+	lyrics_voice_name = null;
+    }
 });
 
+$("form#uploadLyricsForm").submit(function(event){
+ 
+    //disable the default form submission
+    event.preventDefault();
+ 
+    //grab all form data  
+    var formData = new FormData($(this)[0]);
+    formData.append("collectionName", "collection_name");
+    formData.append("songName", "song_name");
+    formData.append("voiceName", "lyrics_voice_name");
+    
+    if (lyrics_voice_name != null) {
+	$.ajax({
+	    url: 'upload_lyrics.php',
+	    type: 'POST',
+	    data: formData,
+	    async: false,
+	    cache: false,
+	    contentType: false,
+	    processData: false,
+	    success: function (returndata) {
+		alert(returndata);
+	    }
+	}); 
+    }
+    return false;
+});
 
 

@@ -1,5 +1,5 @@
 <?php
-ob_start();
+//ob_start();
 require_once __DIR__.'/vendor/autoload.php';
 
 session_start();
@@ -10,7 +10,7 @@ session_start();
  * If this is a dev site we aren't using the access token at all.
  */
 $home_uri = 'https://' . $_SERVER['HTTP_HOST'];
-var $dev_site = (substr($_SERVER['HTTP_HOST'], -30, 30) != 'teachyourselfgeorgiansongs.org');
+$dev_site = (substr($_SERVER['HTTP_HOST'], -30, 30) != 'teachyourselfgeorgiansongs.org');
 if ($dev_site) {
     $_SESSION['access_token'] = 'dev site: no access token needed';
 }
@@ -79,8 +79,22 @@ if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
                 <option value='top'>Top</option>                
               </select>
             </div>
-            <label for="uploadLyrics"> Upload Lyrics For A Voice</label>
-	    <select id="uploadLyrics" class="form-control" disabled=true>
+            <div id="uploadLyricsRow" class="form-group">
+	      <label id="uploadLyricsLabel", for="uploadLyrics"> Upload Lyrics </label>
+	      <select id="uploadLyrics" class="form-control" disabled=true>
+	      </select>
+	    </div>
+	    <div id="uploadLyricsFormRow" class="form-group">
+		<form id="uploadLyricsForm">
+		    <input type="hidden" name="hidden_form_input_id" value="123456" readonly="true">
+		    <input type="file" name="lyricsFile" id="selectedLyricsFile" style="display: none;" 
+			   onchange="document.getElementsByTagName('p')[0].innerHTML=this.value;" />
+		    <input type="button" value="Browse" onclick="document.getElementById('selectedLyricsFile').click();" />
+		    <p>no file chosen</p>
+		    <!--<input name="lyricsFile" type="file" /><br />-->
+		    <input type="submit" value="Upload">
+		</form>
+	    </div>
 	</div>
 	<div id="main" class="main">
 	  <div id="plot-container">
@@ -116,5 +130,5 @@ if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
 </html>
 
 <?php
-ob_end_flush();
+//ob_end_flush();
 ?>

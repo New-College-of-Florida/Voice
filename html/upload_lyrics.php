@@ -1,4 +1,4 @@
 <?php
-console.log('Ima gonna upload me some lyrics');
+echo "I'm a gonna upload me some lyrics";
 ?>
 

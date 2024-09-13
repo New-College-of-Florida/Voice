@@ -10,6 +10,17 @@ function get_voice_file_extension(voiceName) {
   } else if(voiceName == "mixed") {
     voice = "";
   }
-  return voice
+    return voice;
 }
 
+function get_voice_name(file_ext) {
+    name = null;
+    if (file_ext == "AHDS1M") {
+	name = "Bass";
+    } else if (file_ext == "AHDS2M") {
+	name = "Mid";
+    } else if (file_ext == "AHDS3M") {
+	name = "Top";
+    }
+    return name;
+}
