@@ -8,3 +8,7 @@
 *.out
 !OptimizedRandomForestRegressor.zip
 html/georgian/data/syllables/*/*/*_save.txt
+*/oauth-credentials.json
+/html/composer.json
+/html/composer.lock
+/html/vendor
