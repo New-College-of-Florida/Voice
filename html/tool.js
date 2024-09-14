@@ -12,6 +12,10 @@ var voice_name = null;
 var lyrics_voice_name = null;
 var selected_lyrics = 0;
 
+//!! Something in get_voice_file_extension is broken
+var voice_file_extensions = {"bass" : "AHDS1M", "mid" : "AHDS2M", "top" : "AHDS3M",
+			     "Bass" : "AHDS1M", "Mid" : "AHDS2M", "Top" : "AHDS3M"};
+
 /* Screen elements*/
 var visible_elts = {"uploadLyricsForm":"block",
 		    "audioPlayer":"block",
@@ -21,6 +25,23 @@ var visible_elts = {"uploadLyricsForm":"block",
 		    "merge_word_right_button":"inline"
 		   };
 
+
+function get_voice_file_extension(voiceName) {
+  console.log('[get_voice_file_extension]'); 
+  let name = voiceName.toLowerCase();
+  voiceExt = null;
+  if(name == "bass") {
+    voiceExt = "AHDS1M";
+  } else if(name == "mid"){
+    voiceExt = "AHDS2M";
+  } else if(name == "top") {
+    voiceExt = "AHDS3M";
+  } else if(name == "mixed") {
+    voiceExt = "";
+  }
+    console.log(voiceName + ': ' + voiceExt);  
+    return voiceExt;
+}
 
 /**
  * Some type definitions for JSDoc which should significantly improve the experience of dealing with this code.
@@ -1331,7 +1352,7 @@ function enableLyricsUpload(voices) {
 	$('<option/>').val('').html('').appendTo('#uploadLyrics');
 	for (const voice of voices){
 	    $('<option/>').val(get_voice_name(voice)).html(get_voice_name(voice)).appendTo('#uploadLyrics');
-	    console.log(voice);
+	    console.log(voice + ': ' + get_voice_name(voice));
 	}
     }
 }
@@ -1429,10 +1450,12 @@ $("form#uploadLyricsForm").submit(function(event){
  
     //grab all form data  
     var formData = new FormData($(this)[0]);
-    formData.append("collectionName", "collection_name");
-    formData.append("songName", "song_name");
-    formData.append("voiceName", "lyrics_voice_name");
-    
+    formData.append("collectionName", collection_name);
+    formData.append("songName", song_name);
+    formData.append("voiceName", lyrics_voice_name);
+    console.log('[uploadLyrics submit] ' + lyrics_voice_name.toLowerCase() + ': voice ext = ' + voice_file_extensions[lyrics_voice_name]);
+    formData.append("voiceExtension", voice_file_extensions[lyrics_voice_name]);
+
     if (lyrics_voice_name != null) {
 	$.ajax({
 	    url: 'upload_lyrics.php',
@@ -1443,6 +1466,7 @@ $("form#uploadLyricsForm").submit(function(event){
 	    contentType: false,
 	    processData: false,
 	    success: function (returndata) {
+		console.log(returndata);
 		alert(returndata);
 	    }
 	}); 

@@ -18,7 +18,7 @@ if ($dev_site) {
 /* delegate Oauth2 user authentication*/
 if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
   header('Location: ' . filter_var($home_uri  . '/oauth2callback.php', FILTER_SANITIZE_URL));
-} 
+}
 ?>
 
 <!DOCTYPE html>
@@ -87,6 +87,7 @@ if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
 	    <div id="uploadLyricsFormRow" class="form-group">
 		<form id="uploadLyricsForm">
 		    <input type="hidden" name="hidden_form_input_id" value="123456" readonly="true">
+		    <input type="hidden" name="MAX_FILE_SIZE" value="30000" />
 		    <input type="file" name="lyricsFile" id="selectedLyricsFile" style="display: none;" 
 			   onchange="document.getElementsByTagName('p')[0].innerHTML=this.value;" />
 		    <input type="button" value="Browse" onclick="document.getElementById('selectedLyricsFile').click();" />
