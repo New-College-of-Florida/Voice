@@ -1268,22 +1268,22 @@ async function update_plot(collectionName, songName, voiceName) {
       {
         buttons: [
           {
-            args: [{'buttontype': 'lyrics', 'visible': [false, false, false]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
+            args: [{'buttontype': 'lyrics', 'visible': [false, false, false]}, [data.indexOf(bassLyricsTrace), data.indexOf(midLyricsTrace), data.indexOf(topLyricsTrace)]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (None)',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'lyrics', 'visible': [true, false, false]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
+            args: [{'buttontype': 'lyrics', 'visible': [true, false, false]}, [data.indexOf(bassLyricsTrace), data.indexOf(midLyricsTrace), data.indexOf(topLyricsTrace)]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (Bass)',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'lyrics', 'visible': [false, true, false]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
+            args: [{'buttontype': 'lyrics', 'visible': [false, true, false]}, [data.indexOf(bassLyricsTrace), data.indexOf(midLyricsTrace), data.indexOf(topLyricsTrace)]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (Middle)',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'lyrics', 'visible': [false, false, true]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
+            args: [{'buttontype': 'lyrics', 'visible': [false, false, true]}, [data.indexOf(bassLyricsTrace), data.indexOf(midLyricsTrace), data.indexOf(topLyricsTrace)]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (Top)',
             method: 'restyle'
           }
