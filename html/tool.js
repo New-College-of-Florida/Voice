@@ -5,7 +5,7 @@ var plot = document.getElementById('main_plot');
 var plot2 = document.getElementById('mad_plot');
 var audio_timer = null;
 var audio_shifts = null;
-var first_sounds = null;
+var first_sounds = null; //!! bad global - functions have obscure side effects
 var collection_name = null;
 var song_name = null;
 var voice_name = null;
@@ -51,7 +51,7 @@ function get_voice_file_extension(voiceName) {
  *       Example: When passing arguments to most of our written functions. Reading/writing of saves?
  *       - mergeAnnotation()
  *       - onButtonMergeAnnotation()
- * @typedef {Object} TimeSyllable - Represents a time block and it's syllable within the internal data structure.
+ * @typedef {Object} TimeSyllable - Represents a time block and its syllable within the internal data structure.
  * @property {number} syllableIndex - The syllable's index within the original syllable array.
  *                                      `-1` if no syllable exists at this position.
  * @property {number} timeBlockIndex - The time block's index within the time_blocks structure.
@@ -880,22 +880,31 @@ async function get_audio_shift_file(collectionName, songName) {
   }
 }
 
-function get_file(collectionName, songName, voice, mad = false) {
-  if(mad) {
-    return $.ajax({
-      url:"georgian/data/ground-estimate-statistics/mad/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
-      type:'GET'
-    });
-  } else {
+function get_file(collectionName, songName, voice, dataType = "audio") {
+ if(dataType == "audio") {
     console.log("georgian/data/ground-estimate/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt");
     return $.ajax({
         url:"georgian/data/ground-estimate/" + collectionName + "/" + songName + "/" + voice + "_shifted.txt",
         type:'GET'
       });
-  }
+ } else if(dataType == "mad") {
+     return $.ajax({
+	 url:"georgian/data/ground-estimate-statistics/mad/" + collectionName + "/" + songName + "/"
+	     + voice + "_shifted.txt",
+	 type:'GET'
+     });
+ } else if(dataType == "notes") {
+     return $.ajax({
+	 url:"georgian/data/pitches-postprocessed/crepe/" + collectionName + "/" + songName + "/"
+	     + songName + "_" + voice + ".notes_shifted.txt",
+	 type:'GET'
+     });
+ } else {
+     console.log("[get_file] Could not retrieve data type " + dataType + " for song " + songName);
+     return false;
+ }
 }
 
-// Duplicate of function in sessionScribe.php
 function get_voice_file_extension(voiceName) {
   voice = null;
   if(voiceName == "bass") {
@@ -911,30 +920,33 @@ function get_voice_file_extension(voiceName) {
 }
 
 async function get_voice(collectionName, songName, voiceName) {
-  voice_file_extension = get_voice_file_extension(voiceName);
-  await get_audio_shift_file(collectionName, songName);
-  data = await get_file(collectionName, songName, voice_file_extension);
-  var dataX = splitlines(data).map(function(ln){
-    return get_shifted_time(parseFloat(ln.split(' ')[0]/100), voiceName);
-  });
-  var dataY = splitlines(data).map(function(ln){
-    return parseFloat(ln.split(' ')[1]);
-  });
-  mad = await get_file(collectionName, songName, voice_file_extension, true);
-  var dataMad = splitlines(mad).map(function(ln){
-    return parseFloat(ln.split(' ')[1]);
-  });
-  data_mad_low = [];
-  for(var i = 0;i<dataY.length;i++) {
-    data_mad_low.push(Math.max(0,dataY[i] - dataMad[i]));
-  }
-  data_mad_high = [];
-  for(var i = 0;i<dataY.length;i++) {
-    data_mad_high.push(dataY[i] + dataMad[i]);
-  }
-  
-  return [dataX, dataY, data_mad_low, data_mad_high, dataMad];
-  
+    voice_file_extension = get_voice_file_extension(voiceName);
+    await get_audio_shift_file(collectionName, songName); //!! fills first_sounds for this song only; overwritten each time
+    data = await get_file(collectionName, songName, voice_file_extension, "audio");
+    var dataX = splitlines(data).map(function(ln){
+	return get_shifted_time(parseFloat(ln.split(' ')[0]/100), voiceName);
+    });
+    var dataY = splitlines(data).map(function(ln){
+	return parseFloat(ln.split(' ')[1]);
+    });
+    mad = await get_file(collectionName, songName, voice_file_extension, "mad");
+    var dataMad = splitlines(mad).map(function(ln){
+	return parseFloat(ln.split(' ')[1]);
+    });
+    data_mad_low = [];
+    for(var i = 0;i<dataY.length;i++) {
+	data_mad_low.push(Math.max(0,dataY[i] - dataMad[i]));
+    }
+    data_mad_high = [];
+    for(var i = 0;i<dataY.length;i++) {
+	data_mad_high.push(dataY[i] + dataMad[i]);
+    }
+    notes = await get_file(collectionName, songName, voice_file_extension, "notes");
+    var dataNotes = splitlines(notes).map(function(ln){
+	return parseFloat(ln.split(' ')[1]);
+    });
+
+    return [dataX, dataY, data_mad_low, data_mad_high, dataNotes];
 }
 
 function generate_mad(x1, y1, y2) {
@@ -989,8 +1001,9 @@ async function update_plot(collectionName, songName, voiceName) {
   var bassLyricsTrace = {
     x: plot.bassTimeSyllables.map(timeSyllable => timeSyllable.x),
     y: plot.bassTimeSyllables.map(() => 25),
-    textposition: 'middle center',
+    textposition: 'top center',
     text: plot.bassTimeSyllables.map(timeSyllable => timeSyllable.text),
+    textfont: {size: 16},
     mode: 'markers+text',
     name: 'Bass lyrics',
     visible: false,
@@ -1041,6 +1054,18 @@ async function update_plot(collectionName, songName, voiceName) {
     marker: {
       color: 'red',
       size: 1,
+    }
+  };
+
+  var bass_notes_trace = {
+    x: bass_data[0],
+    y: bass_data[4],
+    mode: 'markers',
+    name: 'Bass notes',
+    type: 'scattergl',
+    marker: {
+	    color: 'pink',
+	    size: 3,
     }
   };
 
@@ -1110,6 +1135,18 @@ async function update_plot(collectionName, songName, voiceName) {
     }
   };
 
+  var mid_notes_trace = {
+    x: mid_data[0],
+    y: mid_data[4],
+    mode: 'markers',
+    name: 'Mid notes',
+    type: 'scattergl',
+    marker: {
+	    color: 'lightblue',
+	    size: 3,
+    }
+  };
+
   try {
     plot.topTimeSyllables =  await readTimeSyllables(collectionName, songName, "top");
   } catch (error) {
@@ -1175,6 +1212,18 @@ async function update_plot(collectionName, songName, voiceName) {
       size: 1,
     }
   };
+
+  var top_notes_trace = {
+    x: top_data[0],
+    y: top_data[4],
+    mode: 'markers',
+    name: 'Top notes',
+    type: 'scattergl',
+    marker: {
+	    color: 'lightgreen',
+	    size: 3,
+    }
+  };
 	
 
 //-----------------------------------
@@ -1211,7 +1260,7 @@ async function update_plot(collectionName, songName, voiceName) {
 
   // console.log(top_data);
 
-  var data = [bass_trace, bassLyricsTrace, bass_mad_high_trace, bass_mad_low_trace, mid_trace, midLyricsTrace, mid_mad_low_trace, mid_mad_high_trace, top_trace, topLyricsTrace, top_mad_low_trace, top_mad_high_trace];
+    var data = [bass_trace, bassLyricsTrace, bass_mad_high_trace, bass_mad_low_trace, bass_notes_trace, mid_trace, midLyricsTrace, mid_mad_low_trace, mid_mad_high_trace, mid_notes_trace, top_trace, topLyricsTrace, top_mad_low_trace, top_mad_high_trace, top_notes_trace];
   var data2 = [histogram_mid_trace, histogram_bass_trace, histogram_top_trace];
 
   var layout = {
