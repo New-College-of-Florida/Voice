@@ -19,8 +19,6 @@ var voice_file_extensions = {"bass" : "AHDS1M", "mid" : "AHDS2M", "top" : "AHDS3
 /* Screen elements*/
 var visible_elts = {"uploadLyricsForm":"block",
 		    "audioPlayer":"block",
-		    "shift_words_left_button":"inline",
-		    "shift_words_right_button":"inline",
 		    "merge_word_left_button":"inline",
 		    "merge_word_right_button":"inline"
 		   };
@@ -1289,7 +1287,7 @@ async function update_plot(collectionName, songName, voiceName) {
           }
         ],
         yanchor: 'top',
-        y: 0.5,
+        y: 0.4,
         direction: 'down',
         showactive: true,
         type: 'dropdown',
@@ -1326,7 +1324,7 @@ async function update_plot(collectionName, songName, voiceName) {
           }
         ],
         yanchor: 'bottom',
-        y: -0.2,
+        y: -0.4,
         xanchor: 'auto',
         direction: 'right',
         type: 'buttons',

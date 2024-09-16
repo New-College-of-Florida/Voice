@@ -107,8 +107,6 @@ if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
             </audio>
             <div id="main_plot" class="card-body d-flex align-items-center justify-content-center"></div>
 	    <div id="button-container">
-		<button class="plot_button" id="shift_words_left_button" onclick = "onButtonShiftAnnotations('left')" type="button"><== Shift Words Left</button>
-		<button class="plot_button" id="shift_words_right_button" onclick = "onButtonShiftAnnotations('right')" type="button">Shift Words Right ==></button>
 		<button class="plot_button" id="merge_word_left_button" onclick = "onButtonMergeAnnotation('left')" type="button">Merge Word Back</button>
 		<button class="plot_button" id="merge_word_right_button" onclick = "onButtonMergeAnnotation('right')" type="button">Merge Word Forward</button>
 	    </div>
