@@ -11,6 +11,7 @@ var song_name = null;
 var voice_name = null;
 var lyrics_voice_name = null;
 var selected_lyrics = 0;
+var user_type = "singer"; // or scholar
 
 //!! Something in get_voice_file_extension is broken
 var voice_file_extensions = {"bass" : "AHDS1M", "mid" : "AHDS2M", "top" : "AHDS3M",
@@ -1260,7 +1261,11 @@ async function update_plot(collectionName, songName, voiceName) {
 
   // console.log(top_data);
 
-    var data = [bass_trace, bassLyricsTrace, bass_mad_high_trace, bass_mad_low_trace, bass_notes_trace, mid_trace, midLyricsTrace, mid_mad_low_trace, mid_mad_high_trace, mid_notes_trace, top_trace, topLyricsTrace, top_mad_low_trace, top_mad_high_trace, top_notes_trace];
+  var data = [bassLyricsTrace, midLyricsTrace, topLyricsTrace, bass_trace, mid_trace, top_trace, bass_notes_trace, mid_notes_trace, top_notes_trace];
+  var scholar_data = [bass_mad_high_trace, bass_mad_low_trace, mid_mad_low_trace, mid_mad_high_trace, top_mad_low_trace, top_mad_high_trace];
+  if (user_type == "scholar") {
+      data = data.concat(scholar_data);
+  }
   var data2 = [histogram_mid_trace, histogram_bass_trace, histogram_top_trace];
 
   var layout = {
@@ -1268,22 +1273,22 @@ async function update_plot(collectionName, songName, voiceName) {
       {
         buttons: [
           {
-            args: [{'buttontype': 'lyrics', 'visible': [false, false, false]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
+            args: [{'buttontype': 'lyrics', 'visible': [false, false, false]}, [0, 1, 2]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (None)',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'lyrics', 'visible': [true, false, false]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
+            args: [{'buttontype': 'lyrics', 'visible': [true, false, false]}, [0, 1, 2]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (Bass)',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'lyrics', 'visible': [false, true, false]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
+            args: [{'buttontype': 'lyrics', 'visible': [false, true, false]}, [0, 1, 2]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (Middle)',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'lyrics', 'visible': [false, false, true]}, [1, 5, 9]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
+            args: [{'buttontype': 'lyrics', 'visible': [false, false, true]}, [0, 1, 2]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (Top)',
             method: 'restyle'
           }
@@ -1366,7 +1371,9 @@ async function update_plot(collectionName, songName, voiceName) {
   }
 
   Plotly.newPlot(plot, data, layout);
-  Plotly.newPlot(plot2, data2, layout2);
+  if (user_type == "scholar") {
+    Plotly.newPlot(plot2, data2, layout2);
+  }
 
   song_name_ext = get_voice_file_extension(voiceName);
   if(song_name_ext != "") {

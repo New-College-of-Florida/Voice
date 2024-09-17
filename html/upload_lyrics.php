@@ -1,14 +1,18 @@
 <?php
 header("content-type: text/html; charset=UTF-8");
+
+// allowable characters and transcription
 $englishChars = str_split("abcdefghijklmnopqrstuvwxyz'- \n");
-$georgianChars = str_split(""); //!!
-$fileToSave = $_POST['voiceExtension'] . "_syllables.txt";
+$georgianChars = str_split("აბგდევზთიკლმნოპჟრსტუფქღყშჩცძშჭხჯჰ \n"); //!! should go up to e183bf
+$language = "";
+
+// move uploaded file to temporary location 
 $syllablesDir = __DIR__ . "/georgian/data/syllables/" .  $_POST['collectionName'] . "/" . $_POST['songName'] . "/";
 $uploadsDir = __DIR__ . "/uploads/" . $_POST['collectionName'] . "/" . $_POST['songName'] . "/";
+$tempFile = $uploadsDir . $_POST['voiceExtension'] . "_syllables_temp.txt";
 if (!is_dir($uploadsDir)) {
     mkdir($uploadsDir, 0755, true);
 }
-$tempFile = $uploadsDir . $fileToSave;
 move_uploaded_file( $_FILES["lyricsFile"]["tmp_name"], $tempFile)
     or exit("Failure: The server couldn't move the file.\n");
 ($_FILES["lyricsFile"]["size"] >= 25)
@@ -16,12 +20,26 @@ move_uploaded_file( $_FILES["lyricsFile"]["tmp_name"], $tempFile)
 (($contents = file_get_contents($tempFile)) !== false)
     or exit("Failure: The server couldn't read the file.\n");
 
+// check file contents
 $contents = str_replace("\r", "", $contents);
 $emptystr = str_replace($englishChars, "", $contents);
-(!strlen($emptystr))
-    or exit("Failure: The file contained characters other than plain-text English lowercase letters, spaces, apostrophes, and new-lines.\n"); //!! add Georgian
+if (!strlen($emptystr)) {
+    $language = "en";
+} else {
+    if (substr($contents, 0, 3) == "\xef\xbb\xbf") { // this 3-byte "BOM" indicates the file is utf-8
+        $contents = substr($contents, 3);
+    }
+    $emptystr = str_replace($georgianChars, "", $contents);
+    if (!strlen($emptystr)) {
+        $language = "ge";
+    } else {
+        exit("Failure: The file contained non-English and non-Georgian characters: " . $emptystr . "\n");
+    }
+}
 
-$targetFile = $syllablesDir . $fileToSave;
+// move file
+$targetFile = $syllablesDir . $_POST['voiceExtension'] . "_syllables_" . $language . ".txt";
+
 (file_put_contents($targetFile, $contents) !== false)
     or exit("Failure: The server couldn't write the file.");
 
