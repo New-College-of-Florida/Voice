@@ -11,6 +11,7 @@ var song_name = null;
 var voice_name = null;
 var lyrics_voice_name = null;
 var selected_lyrics = 0;
+var lyrics_y_value = 25;
 var user_type = "singer"; // or scholar
 
 //!! Something in get_voice_file_extension is broken
@@ -219,6 +220,9 @@ function shiftSyllables(chosenPoints, timeSyllables, direction) {
     preferredIndex = chosenPoints.length - 1
   }
   let chosenSyllableIndex = timeSyllables.findIndex((timeSyllable) => (timeSyllable.x == plot.data[getLyricsTraceIndex(selected_lyrics)].x[chosenPoints[preferredIndex]]));
+
+  // deselect points
+  Plotly.restyle(plot, {selectedpoints: [null]}); 
 
   // Don't go out of bounds.
   if ((chosenSyllableIndex === timeSyllables.length - 1 && direction == "right") || (chosenSyllableIndex === 0 && direction == "left")) {
@@ -636,6 +640,7 @@ async function writeTimeSyllables() {
  * Will not add duplicates.
  */
 function addAveragePointToLyricsTrace() {
+  console.log("[addAveragePointToLyricsTrace]");
   // Check if any points have been selected
   if (Object.keys(selectedPoints).length > 0) {
     // Determine which voice trace to use based on the selected lyrics
@@ -687,6 +692,7 @@ function addAveragePointToLyricsTrace() {
     }
 
     // Find the correct position to insert the new point to keep the trace sorted
+    //!! Consider binary search or reverse lookup table
     let insertIndex = -1;
     for (let lyricsPointIndex = 0; lyricsPointIndex < lyricsTrace.x.length; lyricsPointIndex++) {
       if (lyricsTrace.x[lyricsPointIndex - 1] <= averageX && averageX <= lyricsTrace.x[lyricsPointIndex]) {
@@ -698,7 +704,10 @@ function addAveragePointToLyricsTrace() {
     // Insert the average x value and the fixed y value at the correct position in the lyrics trace
     lyricsTrace.text.splice(insertIndex, 0, "")
     lyricsTrace.x.splice(insertIndex, 0, averageX);
-    lyricsTrace.y.splice(insertIndex, 0, 25);
+    lyricsTrace.y.splice(insertIndex, 0, lyrics_y_value);
+
+    // deselect points
+    Plotly.restyle(plot, {selectedpoints: [null]}); 
   }
 }
 
@@ -1000,7 +1009,7 @@ async function update_plot(collectionName, songName, voiceName) {
 
   var bassLyricsTrace = {
     x: plot.bassTimeSyllables.map(timeSyllable => timeSyllable.x),
-    y: plot.bassTimeSyllables.map(() => 25),
+    y: plot.bassTimeSyllables.map(() => lyrics_y_value),
     textposition: 'top center',
     text: plot.bassTimeSyllables.map(timeSyllable => timeSyllable.text),
     textfont: {size: 16},
@@ -1079,7 +1088,7 @@ async function update_plot(collectionName, songName, voiceName) {
 
   var midLyricsTrace = {
     x: plot.midTimeSyllables.map(timeSyllable => timeSyllable.x),
-    y: plot.midTimeSyllables.map(() => 25),
+    y: plot.midTimeSyllables.map(() => lyrics_y_value),
     textposition: 'middle center',
     text: plot.midTimeSyllables.map(timeSyllable => timeSyllable.text),
     textfont: {size: 16},
@@ -1158,7 +1167,7 @@ async function update_plot(collectionName, songName, voiceName) {
 
   var topLyricsTrace = {
     x: plot.topTimeSyllables.map(timeSyllable => timeSyllable.x),
-    y: plot.topTimeSyllables.map(() => 25),
+    y: plot.topTimeSyllables.map(() => lyrics_y_value),
     textposition: 'middle center',
     text: plot.topTimeSyllables.map(timeSyllable => timeSyllable.text),
     textfont: {size: 16},
