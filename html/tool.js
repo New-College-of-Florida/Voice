@@ -696,6 +696,7 @@ function addAveragePointToLyricsTrace() {
     }
     
     // Insert the average x value and the fixed y value at the correct position in the lyrics trace
+    lyricsTrace.text.splice(insertIndex, 0, "")
     lyricsTrace.x.splice(insertIndex, 0, averageX);
     lyricsTrace.y.splice(insertIndex, 0, 25);
   }
