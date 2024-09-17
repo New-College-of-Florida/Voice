@@ -222,7 +222,7 @@ function shiftSyllables(chosenPoints, timeSyllables, direction) {
   let chosenSyllableIndex = timeSyllables.findIndex((timeSyllable) => (timeSyllable.x == plot.data[getLyricsTraceIndex(selected_lyrics)].x[chosenPoints[preferredIndex]]));
 
   // deselect points
-  Plotly.restyle(plot, {selectedpoints: [null]}); 
+  Plotly.restyle(plot, {buttontype: 'IGNORE', selectedpoints: [null]}); 
 
   // Don't go out of bounds.
   if ((chosenSyllableIndex === timeSyllables.length - 1 && direction == "right") || (chosenSyllableIndex === 0 && direction == "left")) {
@@ -317,124 +317,115 @@ function onButtonShiftSyllables(direction) {
 }
 
 /**
- * This function moves an annotation to the previous or next valid time block if possible.
- * If an annotation is already present at the target time block, it merges the texts.
+ * Moves a syllable in the plot based on the selected points and the specified direction.
+ * The <direction>most selected syllable is moved to the next valid time block in the direction specified.
+ * If the next time block is occupied by another syllable, it merges the texts.
  *
- * @param {Array<number>} chosenPoints - The indices of the selected points in the plot.
- * @param {Array<number>} time_blocks - The array of valid times for annotations.
- * @param {string} direction - The direction in which to move the annotation, either "right" or "left".
- * @param {string} lyrics_trace_name - The name of the trace that contains the lyrics annotations.
+ * @param {number[]} chosenPoints - The indices of the selected points in the plot.
+ * @param {TimeSyllable[]} timeSyllables - The internal data structure containing time blocks and their associated syllables.
+ * @param {string} direction - The direction to move the syllable in, either "right" or "left".
+ * @returns {boolean} False if anything explicitly prevented the move from happening. True otherwise.
  */
-function mergeAnnotation(chosenPoints, time_blocks, direction, lyrics_trace_name) {
-  // Get the current annotations
-  let annotations = plot.layout.annotations;
-  
-  // Find the annotation closest to any of the selected points
-  let closestAnnotationIndex = null;
-  let closestDistance = Infinity;
-  for (var annotationIndex = 0; annotationIndex < annotations.length; annotationIndex++) {
-    for (var pointIndex = 0; pointIndex < chosenPoints.length; pointIndex++) {
+function mergeSyllables(chosenPoints, timeSyllables, direction) {
+  // Find the index of the selected syllable.
+  let preferredIndex = 0;
+  if (direction == "right") {
+    preferredIndex = chosenPoints.length - 1
+  }
+  let chosenSyllableIndex = timeSyllables.findIndex((timeSyllable) => (timeSyllable.x == plot.data[getLyricsTraceIndex(selected_lyrics)].x[chosenPoints[preferredIndex]]));
 
-      // Find the index of the trace that contains the lyrics annotations
-      var trace_index = plot.data.findIndex(function(trace) {
-        return trace.name == lyrics_trace_name
-      });
+  // deselect points
+  Plotly.restyle(plot, {buttontype: 'IGNORE', selectedpoints: [null]}); 
 
-      // Calculate the distance between the annotation and the selected point
-      var distance = Math.abs(annotations[annotationIndex].x - plot.data[trace_index].x[chosenPoints[pointIndex]]);
-      
-      // Update the closest annotation index if the current annotation is closer
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestAnnotationIndex = annotationIndex;
-      }
-    }
+  // Don't go out of bounds.
+  if ((chosenSyllableIndex === timeSyllables.length - 1 && direction == "right") || (chosenSyllableIndex === 0 && direction == "left")) {
+    console.warn(`OUT OF BOUNDS CALL:\n\tmergeSyllables(${chosenPoints}, ${timeSyllables}, ${direction})\n\n\tSELECTED INDEX:\t${chosenSyllableIndex}`);
+    return false;
   }
 
-  // If no annotation is found, log a warning and return
-  if (closestAnnotationIndex === null) {
-    console.warn("WARN: mergeAnnotation() found no annotation!");
-    return;
+  // Try to move the chosen syllable
+  let success = mergeSyllable(chosenSyllableIndex, timeSyllables, direction);
+  if (!success) {
+    return false;
   }
-  
-  // Determine the current time block index.
-  let currentTimeBlockIndex = time_blocks.indexOf(annotations[closestAnnotationIndex].x);
-  let targetTimeBlockIndex = currentTimeBlockIndex;
 
-  // If the shift direction is "left"...
-  if (direction === "left") {
+  // Try to identify the trace index by name.
+  let thisTraceIndex = getLyricsTraceIndex(selected_lyrics);
 
-    // Calculate the previous time block index
-    targetTimeBlockIndex--;
-
-    // If there's no previous time block, return
-    if (targetTimeBlockIndex < 0) {
-      console.warn("WARN: mergeAnnotation() found no previous time block!");
-      return;
-    }
-
-  // Else, if the shift direction is "right"...
-  } else if (direction === "right") {
-
-    // Calculate the next time block index
-    targetTimeBlockIndex++;
-
-    // If there's no next time block, return
-    if (targetTimeBlockIndex >= time_blocks.length) {
-      console.warn("WARN: mergeAnnotation() found no next time block!");
-      return;
-    }
-
-  // Else, there was no valid direction given, return.
+  if (thisTraceIndex != -1) {
+    // Update the plot with the new syllables
+    updateLyricsFromTimeSyllables(timeSyllables, thisTraceIndex);
+    return true;
   } else {
-    console.warn("WARN: mergeAnnotation() was not given a valid direction!");
-    return;
+    console.error(`Couldn't find the index of ${selected_lyrics}!`);
+    return false;
   }
-  
-  // Find if there's an annotation at the target time block
-  let targetAnnotationIndex = annotations.findIndex(annotation => annotation.x === time_blocks[targetTimeBlockIndex]);
-  
-  // If there's an annotation at the target time block, merge the texts
-  if (targetAnnotationIndex !== -1) {
-    if (direction === "left") {
-      annotations[targetAnnotationIndex].text += '-' + annotations[closestAnnotationIndex].text;
-    } else {
-      annotations[targetAnnotationIndex].text = annotations[closestAnnotationIndex].text + '-' + annotations[targetAnnotationIndex].text;
-    }
-
-    // Remove the closest annotation
-    annotations.splice(closestAnnotationIndex, 1);
-  } else {
-
-    // Move the closest annotation to the target time block
-    annotations[closestAnnotationIndex].x = time_blocks[targetTimeBlockIndex];
-  }
-
-  // Update the plot with the new annotations
-  Plotly.relayout(plot, {annotations: annotations});
 }
 
 /**
- * This function is called when the "Merge" buttons are clicked.
- * It moves the selected annotation back/forward if possible.
+ * Moves a syllable to the next valid time block in the specified direction.
+ * If the target time block is occupied, it merges the texts.
+ * 
+ * @param {number} targetIndex - The index of the syllable to move within `timeSyllables`.
+ * @param {TimeSyllable[]} timeSyllables - The internal data structure containing time blocks and their associated syllables.
+ * @param {string} direction - The direction to move the syllable, either "right" or "left".
+ * @returns {boolean} True if the move was successful, false if the move failed (e.g., due to moving out of bounds or other issues).
+ */
+function mergeSyllable(targetIndex, timeSyllables, direction) {
+  // Don't go out of bounds.
+  if ((targetIndex >= (timeSyllables.length - 1) && direction == "right") || (targetIndex <= 0 && direction == "left")) {
+    console.warn(`OUT OF BOUNDS CALL:\n\tmergeSyllable(${targetIndex}, ${timeSyllables}, ${direction})\n`);
+    return false;
+  }
+
+  let nextTargetIndex;
+  if (direction === "right") {
+    // Find the next time block to the right of the current syllable
+    nextTargetIndex = targetIndex + 1;
+  } else if (direction === "left") {
+    // Find the last time block to the left of the current syllable
+    nextTargetIndex = targetIndex - 1;
+  }
+
+  // If there's a syllable at the target time block, merge the texts
+  if (timeSyllables[nextTargetIndex].text != "") {
+    if (direction === "left") {
+      timeSyllables[targetIndex].text = timeSyllables[nextTargetIndex].text + '-' + timeSyllables[targetIndex].text;
+    } else {
+      timeSyllables[targetIndex].text += '-' + timeSyllables[nextTargetIndex].text;
+    }
+  }
+
+  // Move the syllable to the target time block
+  timeSyllables[nextTargetIndex].syllableIndex = timeSyllables[targetIndex].syllableIndex;
+  timeSyllables[nextTargetIndex].text = timeSyllables[targetIndex].text;
+  timeSyllables[targetIndex].syllableIndex = -1;
+  timeSyllables[targetIndex].text = "";
+
+  return true;
+}
+
+/**
+ * This function is called when a button to merge syllables in a specific direction is clicked.
+ * It moves the selected syllable to the next valid time block in the direction specified by the button.
  * If an annotation is already present at the target time block, it merges the texts.
  * 
- * @param {string} direction - - The direction in which to move the annotation, either "right" or "left".
+ * @param {string} direction - The direction in which to move the syllable, either "right" or "left".
  */
-function onButtonMergeAnnotation(direction) {
+function onButtonMergeSyllables(direction) {
   // Check if any points have been selected
   if (Object.keys(selectedPoints).length > 0) {
-    // Get all selected points
-    let allSelectedPoints = [];
-    for (let selectedPoint in selectedPoints) {
-      allSelectedPoints.push(...selectedPoints[selectedPoint]);
-    }
-    
     // Determine which time blocks to use based on the selected lyrics
-    let time_blocks = plot.data[getLyricsTraceIndex(selected_lyrics)].x;
+    let timeBlocksTrace = plot.data[getLyricsTraceIndex(selected_lyrics)];
+
+    let allTimeSyllables = [plot.bassTimeSyllables, plot.midTimeSyllables, plot.topTimeSyllables];
     
-    // Call the mergeAnnotation function to merge the annotations
-    mergeAnnotation(allSelectedPoints, time_blocks, direction, lyrics_trace_name);
+    // Get all selected points for the current lyrics trace
+    let lyricsPoints = [];
+    lyricsPoints.push(...selectedPoints[timeBlocksTrace.name]);
+
+    // Call the mergeSyllables function to move the syllables in the specified direction
+    mergeSyllables(lyricsPoints, allTimeSyllables[selected_lyrics - 1], direction);
   }
 }
 
@@ -499,6 +490,7 @@ function on_button_delete() {
 
       //Package up the new array of y values in an update, and send the update using restyle.
       var update = {
+        buttontype: 'IGNORE', 
         y: [newData] //When sending an array as part of the update, it needs to be put inside another array.
       }
 
@@ -720,7 +712,7 @@ function addAveragePointToLyricsTrace() {
     updateLyricsFromTimeSyllables(timeSyllables, getLyricsTraceIndex(selected_lyrics));
 
     // deselect points
-    Plotly.restyle(plot, {selectedpoints: [null]}); 
+    Plotly.restyle(plot, {buttontype: 'IGNORE', selectedpoints: [null]}); 
   }
 }
 
