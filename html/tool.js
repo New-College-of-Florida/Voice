@@ -714,6 +714,9 @@ function buttonManager(eventData) {
       update_selected_lyrics(eventData);
       break;
 
+    case 'scale':
+      adjustScale(eventData);
+
     case 'save':
       writeTimeSyllables();
       break;
@@ -736,6 +739,104 @@ function buttonManager(eventData) {
     default:
       console.warn("An unrecognized button called plotly_restlye! Found button:\t" + eventData[0].buttontype + "\n");
   }
+}
+
+/**
+ * Converts a given frequency to cents.
+ * 
+ * @param {number} frequency - The frequency to convert to cents, as a number.
+ * 
+ * @returns If frequency > 0, the frequency in cents, as a number. Else, returns 1.
+ */
+function frequencyToCents(frequency) {
+  if (frequency > 0) {
+    const frequencyA4 = 440;
+    const cents = 1200 * Math.log2(frequency / frequencyA4);
+    return cents;
+  } else {
+    console.warn(`[frequencyToCents]\tFrequency at or below 0:\t${frequency}`);
+    return 1;
+  }
+}
+
+/**
+ * Finds the note name index for the given frequency.
+ * 
+ * @param {number} frequency - The frequency to get the note index of, as a number.
+ * 
+ * @returns The note index for the given frequency, as a number.
+ */
+function frequencyToNoteName(frequency) {
+  // TODO: Use this for labelling axis? (Move outside function or something)
+  const noteNames = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"];
+
+  const cents = frequencyToCents(frequency);
+  const octave = Math.floor(cents / 1200) + 4; // Assuming middle C is C5
+  const semitone = cents % 1200; // Find the semitone within the octave
+  let noteIndex = Math.round(semitone / 100) % 12; // Map semitones to note indices
+
+  // Adjust for edge cases, ensuring A# is correctly identified
+  if (semitone >= 990 && semitone < 1000) { // Handle edge case near octave transition
+    noteIndex = 0; // Ensure it rounds down to A if just below 1000 cents
+    octave += 1; // Move to next octave
+  } else {
+    noteIndex = Math.round(semitone / 100); // General case rounding
+  }
+
+  // Attempt to deal with negative indices (brain-dead mod operator caused?)
+  if (noteIndex < 0) {
+    noteIndex += 12;
+  }
+
+  // Return the note index
+  return noteIndex;
+}
+
+/**
+ * Adjust the scale of the main plot.
+ * 
+ * @param {Object} eventData - The data object provided by [Plotly's restyle](https://plotly.com/javascript/plotlyjs-events/#event-data).
+ */
+function adjustScale(eventData) {
+  // Extract the selected option from the event data
+  let selectedOption = eventData[0].scaletype;
+  console.log(`[adjustScale]\tEventData:`);
+  console.log(eventData);
+  // Prepare updates for each trace
+  let update = {};
+
+  // Iterate over each trace and apply the transformation
+  for (let traceIndex = 0; traceIndex < plot.data.length; traceIndex++) {
+    
+    let trace = plot.data[traceIndex];
+    console.log(`[adjustScale]\tTraceInfo:`);
+    console.log(trace, trace.marker.color, traceIndex, trace.y);
+    let transformedData = trace.y; // Default to original data
+    
+    switch(selectedOption) {
+      case 'frequency':
+        // TODO: Reverse operation? Reread original data?
+        break;
+          
+      case 'cents':
+        transformedData = trace.y.map(frequencyToCents);
+        break;
+          
+      case 'notes':
+        transformedData = trace.y.map(frequencyToNoteName);
+        break;
+          
+      default:
+        console.error(`[adjustScale]\tUnknown scale type:\t${selectedOption}`);
+      }
+
+      // Update the y-values for this trace
+      update[`y[${traceIndex}]`] = transformedData;      
+    }
+    console.log(`[adjustScale]\tUpdate:`);
+    console.log(update);
+    // Apply the updates to the plot
+    Plotly.update(plot, update);
 }
 
 function player_update(){
@@ -1338,6 +1439,30 @@ async function update_plot(collectionName, songName, voiceName) {
         direction: 'right',
         showactive: false,
         type: 'buttons',
+      },
+      {
+        buttons: [
+          {
+            args:[{'buttontype': 'scale', 'yaxis': {'type': 'linear'}, 'scaletype': 'frequency'}],
+            label: 'Scale (Frequency)',
+            method: 'restyle'
+          },
+          {
+            args:[{'buttontype': 'scale', 'yaxis': {'type': 'linear'}, 'scaletype': 'cents'}],
+            label: 'Scale (Cents)',
+            method: 'restyle'
+          },
+          {
+            args:[{'buttontype': 'scale', 'yaxis': {'type': 'category'}, 'scaletype': 'notes'}],
+            label: 'Scale (Notes)',
+            method: 'restyle'
+          }
+        ],
+        yanchor: 'top',
+        y: 0.1,
+        direction: 'down',
+        showactive: true,
+        type: 'dropdown',
       }
     ],
     xaxis: { 
