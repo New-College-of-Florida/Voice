@@ -504,50 +504,50 @@ function on_button_delete() {
 }
 
 /**
- * Attempts to read the save file for the designated song/voice.
+ * Attempts to read the time-syllables file for the designated song/voice.
  * Returns the save parsed as an array of TimeSyllables if successful.
  * 
  * @param {string} collectionName The name of the collection of songs.
  * @param {string} songName The name of the song for which to load syllables.
  * @param {string} voiceName The name of the voice (bass, mid, top) for which to load time blocks.
- * @returns {TimeSyllable[]} An array of time blocks and their associated syllables. Refer to the typdef, or this function.
+ * @returns {TimeSyllables[]} An array of time blocks and their associated syllables. Refer to the typdef, or this function.
  * 
- * @throws An exception if the save doesn't exist or otherwise failed to be loaded and parsed.
+ * @throws An exception if the time-syllables file doesn't exist or otherwise failed to be loaded and parsed.
  */
 async function readTimeSyllables(collectionName, songName, voiceName) {
     console.log('[readTimeSyllables]' + collectionName + ' - ' + songName + ' - ' + voiceName );
   // Determine the file extension based on the voice name
   let voiceFileExtension = get_voice_file_extension(voiceName);
 
-  // The save file, if we find it.
-  let saveFile;
+  // The time-syllables file, if we find it.
+  let timeSyllablesFile;
   
-  // Construct the path to the save file
-  let pathToSaveFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_save.txt";
+  // Construct the path to the time-syllables file
+  let timeSyllablesPath = "georgian/data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_time_syllables.txt";
   
-  // Try to find the save file
-  saveFile = await $.ajax({
+  // Try to find the time-syllables file
+  timeSyllablesFile = await $.ajax({
     type: 'GET',
-    url: pathToSaveFile,
+    url: timeSyllablesPath,
     error: function(response) {console.log("Found no save for:\t" + voiceName + "\nReverting to default values.\n");}
   });
   
   // Parse it...
-  parsedSaveFile = splitlines(saveFile).map(line => {
+  parsedTimeSyllablesFile = splitlines(timeSyllablesFile).map(line => {
     const [time, text] = line.split('\t');
     return { time: parseFloat(time), text };
   });
   
   // Return the read times.
-  let timeBlocksFromSaveFile = [];
-  let syllablesFromSaveFile = [];
-  for (let saveChunk of parsedSaveFile) {
-    timeBlocksFromSaveFile.push(saveChunk.time);
-    syllablesFromSaveFile.push(saveChunk.text);
+  let timeBlocksFromTimeSyllablesFile = [];
+  let syllablesFromTimeSyllablesFile = [];
+  for (let saveChunk of parsedTimeSyllablesFile) {
+    timeBlocksFromTimeSyllablesFile.push(saveChunk.time);
+    syllablesFromTimeSyllablesFile.push(saveChunk.text);
   }
   
   // Initialize an array with the same length as time_blocks, filled with objects indicating no syllable
-  let timeSyllables = timeBlocksFromSaveFile.map((timeBlock, index) => ({
+  let timeSyllables = timeBlocksFromTimeSyllablesFile.map((timeBlock, index) => ({
     syllableIndex: -1, // No syllable, so index is -1
     timeBlockIndex: index,
     text: "", // No syllable, so text is an empty string
@@ -556,7 +556,7 @@ async function readTimeSyllables(collectionName, songName, voiceName) {
   
   // Add in the syllables
   for (let index = 0; index < timeSyllables.length; index ++) {
-    let syllable = syllablesFromSaveFile[index];
+    let syllable = syllablesFromTimeSyllablesFile[index];
     if (syllable != "") {
       timeSyllables[index] = {
         ...timeSyllables[index],
@@ -572,7 +572,7 @@ async function readTimeSyllables(collectionName, songName, voiceName) {
 
 /**
  * Attempts to write the currently selected lyrics position and points to a
- * server-side save file. Depends on save_time_syllables.php.
+ * server-side time-syllable file. Depends on save_time_syllables.php.
  */
 async function writeTimeSyllables() {
   // No changing "None".
@@ -607,16 +607,16 @@ async function writeTimeSyllables() {
   // Converting saveData to a string to write to a file
   let saveDataString = saveData.map(pair => pair.join('\t')).join('\n');
   
-  // Construct the path to the save file (partially)
-  let save_path = collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension;
+  // Construct the path to the time-syllable file (partially)
+  let time_syllables_path = collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension;
 
   // Log the voice we want to save
-  console.log("Saving data to path\n", save_path);
+  console.log("Saving data to path\n", time_syllables_path);
   
   // Send the save data to be saved
   let data = new FormData();
   data.append("data", saveDataString);
-  data.append("path", save_path)
+  data.append("path", time_syllables_path)
   let xhr = new XMLHttpRequest();
   xhr.open( 'post', 'save_time_syllables.php', true );
 
