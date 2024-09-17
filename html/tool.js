@@ -1335,17 +1335,19 @@ async function update_plot(collectionName, songName, voiceName) {
             method: 'restyle'
           }
         ],
-        yanchor: 'top',
-        y: 0.4,
-        direction: 'down',
-        showactive: true,
-        type: 'dropdown',
+          yanchor: 'top',
+	  xanchor: 'left',
+	  x: -0.4,
+          y: 0.4,
+          direction: 'down',
+          showactive: true,
+          type: 'dropdown',
       },
       {
         buttons: [
           {
             args: [{'buttontype': 'save'}], 
-            label: 'Save Changes for Current Voice',
+            label: 'Save Lyrics',
             method: 'restyle'
           },
           {
@@ -1355,7 +1357,9 @@ async function update_plot(collectionName, songName, voiceName) {
           }
         ],
         yanchor: 'top',
-        y: 1,
+          y: 1,
+	  xanchor: 'left',
+	  x: -0.4,
         direction: 'down',
         showactive: false,
         type: 'buttons',
