@@ -11,7 +11,7 @@ var song_name = null;
 var voice_name = null;
 var lyrics_voice_name = null;
 var selected_lyrics = 0;
-var lyrics_y_value = 25;
+var lyrics_y_value = -500;
 var user_type = "singer"; // or scholar
 
 //!! Something in get_voice_file_extension is broken
@@ -644,13 +644,17 @@ function addAveragePointToLyricsTrace() {
   // Check if any points have been selected
   if (Object.keys(selectedPoints).length > 0) {
     // Determine which voice trace to use based on the selected lyrics
+    let timeSyllables;
     let voice_trace_name;
     if (selected_lyrics == 1) {
-      voice_trace_name = 'Bass voice';
+        voice_trace_name = "Bass voice";  
+	timeSyllables = plot.bassTimeSyllables;
     } else if (selected_lyrics == 2) {
-      voice_trace_name = 'Middle voice';
+        voice_trace_name = "Mid voice";  
+	timeSyllables = plot.midTimeSyllables;
     } else if (selected_lyrics == 3) {
-      voice_trace_name = 'Top voice';
+        voice_trace_name = "Top voice";  
+	timeSyllables = plot.topTimeSyllables;
     } else {
       console.warn("No points selected or invalid selection.");
       return;
@@ -682,29 +686,38 @@ function addAveragePointToLyricsTrace() {
     }
     let averageX = parseFloat((sumX / selectedPointsForVoice.length).toFixed(2));
 
+    
     // Find the lyrics trace index
-    let lyricsTrace = plot.data[getLyricsTraceIndex(selected_lyrics)];
+    //let lyricsTrace = plot.data[getLyricsTraceIndex(selected_lyrics)];
 
     // No duplicates.
-    if (lyricsTrace.x.findIndex(x => x === averageX) !== -1) {
+      if (timeSyllables.findIndex(ts => ts.x === averageX) !== -1) {
       console.warn("A point with the exact same x value already exists. Skipping insertion.");
       return;
     }
 
     // Find the correct position to insert the new point to keep the trace sorted
     //!! Consider binary search or reverse lookup table
-    let insertIndex = -1;
-    for (let lyricsPointIndex = 0; lyricsPointIndex < lyricsTrace.x.length; lyricsPointIndex++) {
-      if (lyricsTrace.x[lyricsPointIndex - 1] <= averageX && averageX <= lyricsTrace.x[lyricsPointIndex]) {
-        insertIndex = lyricsPointIndex;
-        break;
+    let insertIndex = 0;
+      for (let tsPointIndex = 0; tsPointIndex <= timeSyllables.length; tsPointIndex++) {
+	  if (tsPointIndex == 0 && averageX <= timeSyllables[0].x) {
+	      insertIndex = 0;
+	      break;
+	  }
+	  if (tsPointIndex == timeSyllables.length) {
+	      insertIndex = tsPointIndex;
+	      break;
+          }
+	  if (tsPointIndex > 0 && timeSyllables[tsPointIndex - 1].x <= averageX && averageX <= timeSyllables[tsPointIndex].x) {
+              insertIndex = tsPointIndex;
+              break;
+	  }
       }
-    }
     
     // Insert the average x value and the fixed y value at the correct position in the lyrics trace
-    lyricsTrace.text.splice(insertIndex, 0, "")
-    lyricsTrace.x.splice(insertIndex, 0, averageX);
-    lyricsTrace.y.splice(insertIndex, 0, lyrics_y_value);
+    elt = {syllableIndex: -1, timeBlockIndex: -1, text: "", x: averageX};
+    timeSyllables.splice(insertIndex, 0, elt);
+    updateLyricsFromTimeSyllables(timeSyllables, getLyricsTraceIndex(selected_lyrics));
 
     // deselect points
     Plotly.restyle(plot, {selectedpoints: [null]}); 
@@ -928,6 +941,24 @@ function get_voice_file_extension(voiceName) {
   return voice
 }
 
+// A2 = 110Hz = 0cents
+function toCents(data) {
+    let cents_data = [];
+    for (const datum of data) {
+	cents_data.push(datum.map(function(pt) {
+	    if (pt >= 55.0) {
+		return 1200 * Math.log2(pt / 110);
+	    } else {
+		return -1200 - 20*(55.0 - pt);
+	    }
+	}));
+    }
+    return cents_data;
+}
+
+/* Retrieves voice data from files, where pitches are in Hz
+ * Converts Hz to cents
+ */
 async function get_voice(collectionName, songName, voiceName) {
     voice_file_extension = get_voice_file_extension(voiceName);
     await get_audio_shift_file(collectionName, songName); //!! fills first_sounds for this song only; overwritten each time
@@ -955,7 +986,8 @@ async function get_voice(collectionName, songName, voiceName) {
 	return parseFloat(ln.split(' ')[1]);
     });
 
-    return [dataX, dataY, data_mad_low, data_mad_high, dataNotes];
+    cents_data = toCents([dataY, data_mad_low, data_mad_high, dataNotes]);
+    return [dataX, cents_data[0], cents_data[1], cents_data[2], cents_data[3]];
 }
 
 function generate_mad(x1, y1, y2) {
@@ -1350,10 +1382,18 @@ async function update_plot(collectionName, songName, voiceName) {
       }
     ],
     xaxis: { 
-      range:[-3,3]
+	range:[-3,3],
+	title: {
+          text: "Time (sec.)",
+          standoff: 10
+	}
     }, 
     yaxis : {
-      autorange: true
+	autorange: true,
+	title: {
+          text: "Cents (0 = A2)",
+          standoff: 10
+	}
     },
     shapes: [
     {
