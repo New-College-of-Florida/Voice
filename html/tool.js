@@ -1313,6 +1313,7 @@ async function update_plot(collectionName, songName, voiceName) {
         yanchor: 'top',
         y: 1,
         direction: 'down',
+        showactive: false,
         type: 'buttons',
       },
       {
@@ -1332,6 +1333,7 @@ async function update_plot(collectionName, songName, voiceName) {
         y: -0.4,
         xanchor: 'auto',
         direction: 'right',
+        showactive: false,
         type: 'buttons',
       }
     ],
