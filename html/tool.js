@@ -11,7 +11,7 @@ var song_name = null;
 var voice_name = null;
 var lyrics_voice_name = null;
 var selected_lyrics = 0;
-var lyrics_y_value = -500;
+var lyrics_y_value = -750;
 var user_type = "singer"; // or scholar
 
 //!! Something in get_voice_file_extension is broken
@@ -25,6 +25,7 @@ var visible_elts = {"uploadLyricsForm":"block",
 		    "merge_word_right_button":"inline"
 		   };
 
+console.log(Plotly.version);
 
 function get_voice_file_extension(voiceName) {
   console.log('[get_voice_file_extension]'); 
@@ -1315,6 +1316,27 @@ async function update_plot(collectionName, songName, voiceName) {
       {
         buttons: [
           {
+            args: [{'buttontype': 'language', 'visible': [true, false]}, ['en', 'ge']],
+            label: 'English',
+            method: 'restyle'
+          },
+          {
+            args: [{'buttontype': 'language', 'visible': [false, true]}, ['en', 'ge']], 
+            label: 'ქართული',
+            method: 'restyle'
+          },
+        ],
+          yanchor: 'top',
+	  xanchor: 'left',
+	  x: -0.4,
+          y: 0.3,
+          direction: 'down',
+          showactive: true,
+          type: 'dropdown',
+      },
+      {
+        buttons: [
+          {
             args: [{'buttontype': 'lyrics', 'visible': [false, false, false]}, [data.indexOf(bassLyricsTrace), data.indexOf(midLyricsTrace), data.indexOf(topLyricsTrace)]], // Indices of bassLyricsTrace, midLyricsTrace, topLyricsTrace
             label: 'Lyrics (None)',
             method: 'restyle'
@@ -1393,7 +1415,10 @@ async function update_plot(collectionName, songName, voiceName) {
 	}
     }, 
     yaxis : {
-	autorange: true,
+	autorange: false,
+	autorangeoptions: {
+	    minallowed: -1000
+	},
 	title: {
           text: "Cents (0 = A2)",
           standoff: 10

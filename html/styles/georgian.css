@@ -130,7 +130,7 @@ body {
 #main_plot {
      display: block;
      width: 90%;
-     height: 50%;
+     height: 75%;
      margin: auto;
      padding: 4%;
 }
@@ -138,7 +138,7 @@ body {
 #mad_plot {
      display: block;
      width: 30%;
-     height: 30%;
+     height: 5%;
      margin: auto;
 }
 
