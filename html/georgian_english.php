@@ -90,6 +90,7 @@ function uni2plain($s) {
 }
 
 function ge2en($s) {
+    global $georgianEnglish;
     foreach ($georgianEnglish as $ge => $en) {
         $s = str_replace($ge,$en,$s);
     }

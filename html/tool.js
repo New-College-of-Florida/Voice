@@ -9,14 +9,19 @@ var first_sounds = null; //!! bad global - functions have obscure side effects
 var collection_name = null;
 var song_name = null;
 var voice_name = null;
-var lyrics_voice_name = null;
+var upload_lyrics_voice_name = null;
 var selected_lyrics = 0;
 var lyrics_y_value = -750;
 var user_type = "singer"; // or scholar
+var selected_language = "en";
+var languages = ["en", "ge"]; // in order of button values
 
 //!! Something in get_voice_file_extension is broken
 var voice_file_extensions = {"bass" : "AHDS1M", "mid" : "AHDS2M", "top" : "AHDS3M",
 			     "Bass" : "AHDS1M", "Mid" : "AHDS2M", "Top" : "AHDS3M"};
+
+var lowercase_voice_names = ["bass", "mid", "top"];
+
 
 /* Screen elements*/
 var visible_elts = {"uploadLyricsForm":"block",
@@ -440,11 +445,22 @@ function onButtonMergeAnnotation(direction) {
 }
 
 /**
+ * Updates the `selected_language` global variable.
+ */
+async function update_selected_language() {
+  // Get the active language option from the plot layout
+  selected_language = languages[plot.layout.updatemenus[0].active];
+
+  // Log the active language option for debugging purposes
+  console.log("Active Language set to:", selected_language);
+}
+
+/**
  * Updates the `selected_lyrics` global variable.
  */
 async function update_selected_lyrics() {
   // Get the active lyrics option from the plot layout
-  selected_lyrics = plot.layout.updatemenus[0].active;
+  selected_lyrics = plot.layout.updatemenus[1].active;
 
   // Log the active lyrics option for debugging purposes
   console.log("Active Lyrics set to:", selected_lyrics);
@@ -528,7 +544,7 @@ async function readTimeSyllables(collectionName, songName, voiceName) {
   let timeSyllablesFile;
   
   // Construct the path to the time-syllables file
-  let timeSyllablesPath = "georgian/data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_time_syllables.txt";
+  let timeSyllablesPath = "georgian/data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_time_syllables_" + selected_language +  ".txt";
   
   // Try to find the time-syllables file
   timeSyllablesFile = await $.ajax({
@@ -587,14 +603,8 @@ async function writeTimeSyllables() {
   }
 
   // Determine which file extension to use based on the selected lyrics
-  let voice_file_extension;
-  if (selected_lyrics == 1) {
-    voice_file_extension = get_voice_file_extension("bass");
-  } else if (selected_lyrics == 2) {
-    voice_file_extension = get_voice_file_extension("mid");
-  } else if (selected_lyrics == 3) {
-    voice_file_extension = get_voice_file_extension("top");
-  }
+  lowercaseVoiceName = lowercase_voice_names[selected_lyrics-1]; // None = 0
+  let voice_file_extension = voice_file_extensions[lowercaseVoiceName];
 
   // Extract time blocks from the lyrics trace
   let time_blocks = plot.data[getLyricsTraceIndex(selected_lyrics)].x;
@@ -616,12 +626,13 @@ async function writeTimeSyllables() {
   let time_syllables_path = collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension;
 
   // Log the voice we want to save
-  console.log("Saving data to path\n", time_syllables_path);
+  console.log("Saving data for ", collection_name + "/" + song_name + "/" + lowercaseVoiceName + " in " + selected_language);
   
   // Send the save data to be saved
   let data = new FormData();
   data.append("data", saveDataString);
-  data.append("path", time_syllables_path)
+  data.append("path", time_syllables_path);
+  data.append("language", selected_language);
   let xhr = new XMLHttpRequest();
   xhr.open( 'post', 'save_time_syllables.php', true );
 
@@ -733,6 +744,10 @@ function addAveragePointToLyricsTrace() {
  */
 function buttonManager(eventData) {
   switch (eventData[0].buttontype) {
+    case 'language':
+      update_selected_language(eventData);
+      break;
+
     case 'lyrics':
       update_selected_lyrics(eventData);
       break;
@@ -831,12 +846,12 @@ const collectionDirectories = {"Scherbaum Mzhavanadze":
 function get_shifted_time(time, voice) {
   /*
   shift_id = 0;
-  while(shift_id+1 < audio_shifts[voice_names[voice]].length && audio_shifts[voice_names[voice]][shift_id]['end'] < time) {
+  while(shift_id+1 < audio_shifts[voice_index[voice]].length && audio_shifts[voice_index[voice]][shift_id]['end'] < time) {
     shift_id += 1
   }
   */
-  voice_names = {"bass": 0, "mid": 1, "top": 2, "mixed": 3};
-  return time + first_sounds[voice_names[voice_name]] - first_sounds[3];
+  voice_index = {"bass": 0, "mid": 1, "top": 2, "mixed": 3};
+  return time + first_sounds[voice_index[voice_name]] - first_sounds[3];
 }
 
 /**
@@ -847,9 +862,9 @@ function get_shifted_time(time, voice) {
  * @param {string} songName - The name of the song for which to load syllables.
  * @returns {Promise<string[]>} A promise that resolves to an array of syllables as strings.
  */
-async function getLyricsFromFile(collectionName, songName) {
+async function getLyricsFromFile(collectionName, songName) { //!! getLyricsFromFile should take voice as an argument
   // Construct the URL to the syllables file
-  let pathToSyllablesFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/syllables.txt";
+  let pathToSyllablesFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/syllables_" + selected_language + ".txt";
   
   let syllablesFromFile;
   try {
@@ -1035,7 +1050,7 @@ async function update_plot(collectionName, songName, voiceName) {
   try {
     plot.bassTimeSyllables =  await readTimeSyllables(collectionName, songName, "bass");
   } catch (error) {
-    plot.bassTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "bass"));
+    plot.bassTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "bass")); //!! getLyricsFromFile should take voice as an argument
   }
 
   var bass_data = await get_voice(collectionName, songName, "bass");
@@ -1316,12 +1331,12 @@ async function update_plot(collectionName, songName, voiceName) {
       {
         buttons: [
           {
-            args: [{'buttontype': 'language', 'visible': [true, false]}, ['en', 'ge']],
+            args: [{'buttontype': 'language', 'visible': [true, false]}],
             label: 'English',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'language', 'visible': [false, true]}, ['en', 'ge']], 
+            args: [{'buttontype': 'language', 'visible': [false, true]}], 
             label: 'ქართული',
             method: 'restyle'
           },
@@ -1574,9 +1589,9 @@ $( "#voiceName" ).change(function() {
 });
 
 $( "#uploadLyrics" ).change(function() {
-    lyrics_voice_name = $("#uploadLyrics").val();
-    if (lyrics_voice_name == "") {
-	lyrics_voice_name = null;
+    upload_lyrics_voice_name = $("#uploadLyrics").val();
+    if (upload_lyrics_voice_name == "") {
+	upload_lyrics_voice_name = null;
     }
 });
 
@@ -1589,11 +1604,11 @@ $("form#uploadLyricsForm").submit(function(event){
     var formData = new FormData($(this)[0]);
     formData.append("collectionName", collection_name);
     formData.append("songName", song_name);
-    formData.append("voiceName", lyrics_voice_name);
-    console.log('[uploadLyrics submit] ' + lyrics_voice_name.toLowerCase() + ': voice ext = ' + voice_file_extensions[lyrics_voice_name]);
-    formData.append("voiceExtension", voice_file_extensions[lyrics_voice_name]);
+    formData.append("voiceName", upload_lyrics_voice_name);
+    console.log('[uploadLyrics submit] ' + upload_lyrics_voice_name.toLowerCase() + ': voice ext = ' + voice_file_extensions[upload_lyrics_voice_name]);
+    formData.append("voiceExtension", voice_file_extensions[upload_lyrics_voice_name]);
 
-    if (lyrics_voice_name != null) {
+    if (upload_lyrics_voice_name != null) {
 	$.ajax({
 	    url: 'upload_lyrics.php',
 	    type: 'POST',
