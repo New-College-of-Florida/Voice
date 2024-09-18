@@ -40,7 +40,9 @@ if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
 	<link href="styles/georgian.css" rel="stylesheet">
 	
 	<!--<script src='https://cdn.plot.ly/plotly-2.4.2.min.js'></script>-->
-	<script type="text/javascript" src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+	<!--<script type="text/javascript" src="https://cdn.plot.ly/plotly-latest.min.js"></script>-->
+	<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+
     </head>
     <body>
         <header class="masthead">
@@ -108,7 +110,7 @@ if (!(isset($_SESSION['access_token']) && $_SESSION['access_token'])) {
             <div id="main_plot" class="card-body d-flex align-items-center justify-content-center"></div>
 	    <div id="button-container">
 	    </div>
-            <div id="mad_plot" class="card-body d-flex align-items-center justify-content-center"></div>
+            <!--<div id="mad_plot" class="card-body d-flex align-items-center justify-content-center"></div>-->
 	  </div>
 	</div> 
 	
