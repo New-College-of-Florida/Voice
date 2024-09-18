@@ -13,7 +13,7 @@ var upload_lyrics_voice_name = null;
 var selected_lyrics = 0;
 var lyrics_y_value = -750;
 var user_type = "singer"; // or scholar
-var selected_language = "en";
+var selected_language = 0;
 var languages = ["en", "ge"]; // in order of button values
 
 //!! Something in get_voice_file_extension is broken
@@ -440,10 +440,11 @@ function onButtonMergeSyllables(direction) {
  */
 async function update_selected_language() {
   // Get the active language option from the plot layout
-  selected_language = languages[plot.layout.updatemenus[0].active];
+  selected_language = plot.layout.updatemenus[0].active;
 
   // Log the active language option for debugging purposes
-  console.log("Active Language set to:", selected_language);
+    console.log("Active Language set to:", languages[selected_language]);
+    update_plot(collection_name, song_name, voice_name);
 }
 
 /**
@@ -528,7 +529,6 @@ function on_button_delete() {
  * @throws An exception if the time-syllables file doesn't exist or otherwise failed to be loaded and parsed.
  */
 async function readTimeSyllables(collectionName, songName, voiceName) {
-    console.log('[readTimeSyllables]' + collectionName + ' - ' + songName + ' - ' + voiceName );
   // Determine the file extension based on the voice name
   let voiceFileExtension = get_voice_file_extension(voiceName);
 
@@ -536,17 +536,22 @@ async function readTimeSyllables(collectionName, songName, voiceName) {
   let timeSyllablesFile;
   
   // Construct the path to the time-syllables file
-  let timeSyllablesPath = "georgian/data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_time_syllables_" + selected_language +  ".txt";
+  let timeSyllablesPath = "georgian/data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_time_syllables_" + languages[selected_language] +  ".txt";
   
+  console.log("[readTimeSyllables] Getting file " + timeSyllablesPath);
   // Try to find the time-syllables file
-  timeSyllablesFile = await $.ajax({
+  timeSyllablesUTF8 = await $.ajax({
     type: 'GET',
     url: timeSyllablesPath,
     error: function(response) {console.log("Found no save for:\t" + voiceName + "\nReverting to default values.\n");}
   });
+
+  tsSlice = timeSyllablesUTF8.slice(0, 30);
   
   // Parse it...
-  parsedTimeSyllablesFile = splitlines(timeSyllablesFile).map(line => {
+  timeSyllableLines = splitlines(timeSyllablesUTF8);
+
+  timeSyllablesArray = timeSyllableLines.map(line => {
     const [time, text] = line.split('\t');
     return { time: parseFloat(time), text };
   });
@@ -554,7 +559,7 @@ async function readTimeSyllables(collectionName, songName, voiceName) {
   // Return the read times.
   let timeBlocksFromTimeSyllablesFile = [];
   let syllablesFromTimeSyllablesFile = [];
-  for (let saveChunk of parsedTimeSyllablesFile) {
+  for (let saveChunk of timeSyllablesArray) {
     timeBlocksFromTimeSyllablesFile.push(saveChunk.time);
     syllablesFromTimeSyllablesFile.push(saveChunk.text);
   }
@@ -578,7 +583,7 @@ async function readTimeSyllables(collectionName, songName, voiceName) {
       };
     }
   }
-  
+
   // Return the read save
   return timeSyllables;
 }
@@ -612,19 +617,19 @@ async function writeTimeSyllables() {
 
   // At this point, saveData contains pairs of [time, syllable]
   // Converting saveData to a string to write to a file
-  let saveDataString = saveData.map(pair => pair.join('\t')).join('\n');
+  let saveDataString = saveData.map(pair => pair.join('\t')).join('\n') + '\n'; // add newline
   
   // Construct the path to the time-syllable file (partially)
   let time_syllables_path = collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension;
 
   // Log the voice we want to save
-  console.log("Saving data for ", collection_name + "/" + song_name + "/" + lowercaseVoiceName + " in " + selected_language);
+  console.log("Saving data for ", collection_name + "/" + song_name + "/" + lowercaseVoiceName + " in " + languages[selected_language]);
   
   // Send the save data to be saved
   let data = new FormData();
   data.append("data", saveDataString);
   data.append("path", time_syllables_path);
-  data.append("language", selected_language);
+  data.append("language", languages[selected_language]);
   let xhr = new XMLHttpRequest();
   xhr.open( 'post', 'save_time_syllables.php', true );
 
@@ -864,7 +869,7 @@ function get_shifted_time(time, voice) {
  */
 async function getLyricsFromFile(collectionName, songName) { //!! getLyricsFromFile should take voice as an argument
   // Construct the URL to the syllables file
-  let pathToSyllablesFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/syllables_" + selected_language + ".txt";
+  let pathToSyllablesFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/syllables_" + languages[selected_language] + ".txt";
   
   let syllablesFromFile;
   try {
@@ -958,14 +963,15 @@ function get_voice_file_extension(voiceName) {
 }
 
 // A2 = 110Hz = 0cents
+// clip values below 85Hz (set them to -2000)
 function toCents(data) {
     let cents_data = [];
     for (const datum of data) {
 	cents_data.push(datum.map(function(pt) {
-	    if (pt >= 55.0) {
+	    if (pt >= 85.0) {
 		return 1200 * Math.log2(pt / 110);
 	    } else {
-		return -1200 - 20*(55.0 - pt);
+                return -2000;
 	    }
 	}));
     }
@@ -1050,20 +1056,22 @@ async function update_plot(collectionName, songName, voiceName) {
   try {
     plot.bassTimeSyllables =  await readTimeSyllables(collectionName, songName, "bass");
   } catch (error) {
+    console.log("Failed to read bass time-syllables file.");
     plot.bassTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "bass")); //!! getLyricsFromFile should take voice as an argument
   }
 
   var bass_data = await get_voice(collectionName, songName, "bass");
 
+  show_bass_lyrics = (selected_lyrics == 1);
   var bassLyricsTrace = {
     x: plot.bassTimeSyllables.map(timeSyllable => timeSyllable.x),
     y: plot.bassTimeSyllables.map(() => lyrics_y_value),
     textposition: 'top center',
     text: plot.bassTimeSyllables.map(timeSyllable => timeSyllable.text),
-    textfont: {size: 16},
+    textfont: {size: 20},
     mode: 'markers+text',
     name: 'Bass lyrics',
-    visible: false,
+    visible: show_bass_lyrics,
     showlegend: false,
     type: 'scattergl',
     marker: {
@@ -1134,15 +1142,16 @@ async function update_plot(collectionName, songName, voiceName) {
 
   var mid_data = await get_voice(collectionName, songName, "mid");
 
+  show_mid_lyrics = (selected_lyrics == 2);
   var midLyricsTrace = {
     x: plot.midTimeSyllables.map(timeSyllable => timeSyllable.x),
     y: plot.midTimeSyllables.map(() => lyrics_y_value),
     textposition: 'middle center',
     text: plot.midTimeSyllables.map(timeSyllable => timeSyllable.text),
-    textfont: {size: 16},
+    textfont: {size: 20},
     mode: 'markers+text',
     name: 'Middle lyrics',
-    visible: false,
+    visible: show_mid_lyrics,
     showlegend: false,
     type: 'scattergl',
     marker: {
@@ -1213,15 +1222,16 @@ async function update_plot(collectionName, songName, voiceName) {
 
   var top_data = await get_voice(collectionName, songName, "top");
 
+  show_top_lyrics = (selected_lyrics == 2);
   var topLyricsTrace = {
     x: plot.topTimeSyllables.map(timeSyllable => timeSyllable.x),
     y: plot.topTimeSyllables.map(() => lyrics_y_value),
     textposition: 'middle center',
     text: plot.topTimeSyllables.map(timeSyllable => timeSyllable.text),
-    textfont: {size: 16},
+    textfont: {size: 20},
     mode: 'markers+text',
     name: 'Top lyrics',
-    visible: false,
+    visible: show_top_lyrics,
     showlegend: false,
     type: 'scattergl',
     marker: {
@@ -1229,7 +1239,7 @@ async function update_plot(collectionName, songName, voiceName) {
       color: 'green', // Doesn't really matter what color I use... but eh!
       size: 10, // I need to see!!!
     }
-  }
+  };
 
   var top_trace = {
     x: top_data[0],
@@ -1331,12 +1341,12 @@ async function update_plot(collectionName, songName, voiceName) {
       {
         buttons: [
           {
-            args: [{'buttontype': 'language', 'visible': [true, false]}],
+            args: [{'buttontype': 'language'}], //!! For now it redraws the plot; figure out how to restyle
             label: 'English',
             method: 'restyle'
           },
           {
-            args: [{'buttontype': 'language', 'visible': [false, true]}], 
+            args: [{'buttontype': 'language'}], 
             label: 'ქართული',
             method: 'restyle'
           },
@@ -1346,6 +1356,7 @@ async function update_plot(collectionName, songName, voiceName) {
 	  x: -0.4,
           y: 0.3,
           direction: 'down',
+	  active: selected_language,
           showactive: true,
           type: 'dropdown',
       },
@@ -1377,6 +1388,7 @@ async function update_plot(collectionName, songName, voiceName) {
 	  x: -0.4,
           y: 0.4,
           direction: 'down',
+	  active: selected_lyrics,
           showactive: true,
           type: 'dropdown',
       },
