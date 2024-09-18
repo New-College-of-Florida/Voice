@@ -743,6 +743,14 @@ function buttonManager(eventData) {
     case 'shiftRight':
       onButtonShiftSyllables('right');
       break;
+
+    case 'mergeLeft':
+      onButtonMergeSyllables('left');
+      break;
+
+    case 'mergeRight':
+      onButtonMergeSyllables('right');
+      break;
     
     case 'IGNORE':
       break;
@@ -1360,12 +1368,22 @@ async function update_plot(collectionName, songName, voiceName) {
         buttons: [
           {
             args: [{'buttontype': 'shiftLeft'}], 
-            label: '<== Shift Words Left',
+            label: '<== Shift Left',
             method: 'restyle'
           },
           {
             args: [{'buttontype': 'shiftRight'}], 
-            label: 'Shift Words Right ==>',
+            label: 'Shift Right ==>',
+            method: 'restyle'
+          },
+          {
+            args: [{'buttontype': 'mergeLeft'}], 
+            label: '<== Merge Left',
+            method: 'restyle'
+          },
+          {
+            args: [{'buttontype': 'mergeRight'}], 
+            label: 'Merge Right ==>',
             method: 'restyle'
           }
         ],
