@@ -1,9 +1,6 @@
 <?php
-header("content-type: text/html; charset=UTF-8");
+include_once "georgian_english.php";
 
-// allowable characters and transcription
-$englishChars = str_split("abcdefghijklmnopqrstuvwxyz'- \n");
-$georgianChars = str_split("აბგდევზთიკლმნოპჟრსტუფქღყშჩცძშჭხჯჰ \n"); //!! should go up to e183bf
 $language = "";
 
 // move uploaded file to temporary location 
@@ -25,6 +22,7 @@ $contents = str_replace("\r", "", $contents);
 $emptystr = str_replace($englishChars, "", $contents);
 if (!strlen($emptystr)) {
     $language = "en";
+    //!! $contents = uni2plain($contents); // empties contents
 } else {
     if (substr($contents, 0, 3) == "\xef\xbb\xbf") { // this 3-byte "BOM" indicates the file is utf-8
         $contents = substr($contents, 3);
@@ -38,10 +36,26 @@ if (!strlen($emptystr)) {
 }
 
 // move file
-$targetFile = $syllablesDir . $_POST['voiceExtension'] . "_syllables_" . $language . ".txt";
+$targetFileEn = $syllablesDir . $_POST['voiceExtension'] . "_syllables_en.txt";
+$targetFileGe = $syllablesDir . $_POST['voiceExtension'] . "_syllables_ge.txt";
 
-(file_put_contents($targetFile, $contents) !== false)
-    or exit("Failure: The server couldn't write the file.");
 
+if ($language == "en") {
+    $contentsEn = $contents;
+    $contentsGe = en2ge($contents);
+    echo "[upload_lyrics] contents: " . substr($contents, 0, 10);
+    echo "[upload_lyrics] contentsEn: " . substr($contentsEn, 0, 10);
+    echo "[upload_lyrics] contentsGe: " . substr($contentsGe, 0, 10);
+} else {
+    $contentsGe = $contents;
+    $contentsEn = ge2en($contents);
+}
+
+(file_put_contents($targetFileEn, $contentsEn) !== false)
+    or exit("Failure: The server couldn't write the English file.");
+
+(file_put_contents($targetFileGe, $contentsGe) !== false)
+    or exit("Failure: The server couldn't write the Georgian file.");
+    
 echo "Success! " . $_POST['voiceName'] . " lyrics file saved\nPlease wait a day or two for the lyrics and audio to be aligned.\n";
 ?>
