@@ -163,6 +163,11 @@ async function load_time_blocks(collectionName, songName, voiceName) {
  * @returns {TimeSyllable[]} An array of time blocks and their associated syllables. Refer to the typdef, or this function.
  */
 function createTimeSyllableStructure(syllablesFromFile, timeBlocks) {
+  // We'd like to know about it if we don't have enough time blocks.
+  if (timeBlocks.length < syllablesFromFile.length) {
+    console.warn(`[createTimeSyllableStructure]\tNot enough time blocks for all syllables!`);
+  }
+
   // Initialize an array with the same length as time_blocks, filled with objects indicating no syllable
   let timeSyllables = timeBlocks.map((timeBlock, index) => ({
     syllableIndex: -1, // No syllable, so index is -1
@@ -171,14 +176,20 @@ function createTimeSyllableStructure(syllablesFromFile, timeBlocks) {
     x: timeBlock
   }));
 
-  for (let index = 0; index < timeSyllables.length; index++) {
+  // "Evenly" distribute the syllables
+  let averageTimeBlocksBetweenSyllables = timeBlocks.length / syllablesFromFile.length
+  let timeSyllableIndex = 0;
+  console.log(`[createTimeSyllableStructure]\taverageTimeBlocksBetweenSyllables: ${averageTimeBlocksBetweenSyllables}`);
+
+  for (let index = 0; index < syllablesFromFile.length; index++) {
     let syllable = syllablesFromFile[index];
     if (syllable != null) {
-      timeSyllables[index] = {
-        ...timeSyllables[index],
+      timeSyllables[Math.floor(timeSyllableIndex)] = {
+        ...timeSyllables[Math.floor(timeSyllableIndex)],
         syllableIndex: index,
         text: syllable
       };
+      timeSyllableIndex = timeSyllableIndex + averageTimeBlocksBetweenSyllables;
     }
   }
 
