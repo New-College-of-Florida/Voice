@@ -53,10 +53,6 @@ function get_voice_file_extension(voiceName) {
  * Some type definitions for JSDoc which should significantly improve the experience of dealing with this code.
  */
 /**
- * @todo Replace existing usage of time_blocks and plot.layout.annotations with this structure wherever possible.
- *       Example: When passing arguments to most of our written functions. Reading/writing of saves?
- *       - mergeAnnotation()
- *       - onButtonMergeAnnotation()
  * @typedef {Object} TimeSyllable - Represents a time block and its syllable within the internal data structure.
  * @property {number} syllableIndex - The syllable's index within the original syllable array.
  *                                      `-1` if no syllable exists at this position.
