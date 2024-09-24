@@ -26,8 +26,6 @@ var lowercase_voice_names = ["bass", "mid", "top"];
 /* Screen elements*/
 var visible_elts = {"uploadLyricsForm":"block",
 		    "audioPlayer":"block",
-		    "merge_word_left_button":"inline",
-		    "merge_word_right_button":"inline"
 		   };
 
 console.log(Plotly.version);
@@ -112,45 +110,88 @@ function splitlines(s) {
 }
 
  /**
+  * Creates time blocks from notes data
+  * Returns time blocks structure
+  */
+function create_time_blocks(voiceData) {
+    let times = voiceData[0];
+    let notes = voiceData[4];
+    let timeBlocks = [];
+    let curr_note = notes[0]; // first pitch is not a note
+    for (let index = 0; index <= times.length-7; index++) { //!! 7 = min note length
+	if (notes[index] != curr_note && notes[index] > 27.5) { //!! 27.5Hz = A1
+	    // if what follows is note-length, record the start time
+	    let jndex = 1;
+	    while (jndex < 7) {
+		if (notes[index] != notes[index+jndex]) {
+		    break;
+		}
+		jndex++;
+	    }
+	    if (jndex == 7) {
+		timeBlocks.push(times[index]);
+	    }
+	}
+	curr_note = notes[index];
+    }
+    return timeBlocks;
+}
+
+ /**
  * Loads time blocks for a given voice from a text file.
  * Time blocks represent valid times for syllables.
  * 
- * If it fails for some reason, returns an array with `0` as the only element.
+ * If it fails to get the file, it creates a time blocks array, saves it to the file, and returns it
  *
  * @param {string} collectionName - The name of the collection of songs.
  * @param {string} songName - The name of the song for which to load time blocks.
  * @param {string} voiceName - The name of the voice (bass, mid, top) for which to load time blocks.
+ * @param {array} data - array of data for collection/song/voice - from get_voice() 
  * @returns {Promise<number[]>} A promise that resolves to an array of time blocks as numbers.
  */
-async function load_time_blocks(collectionName, songName, voiceName) {
+async function load_time_blocks(collectionName, songName, voiceName, voiceData) {
+  console.log("[load_time_blocks] ");
+
   // Determine the file extension based on the voice name
   let voiceFileExtension = get_voice_file_extension(voiceName);
 
   // Construct the path to the time blocks file
   let pathToTimeBlocksFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/" + songName + "_" + voiceFileExtension + "_time_blocks.txt";
   
-  let timeBlocksFromFile;
+  let timeBlocks;
   try {
     // Perform an AJAX GET request to load the time blocks file
-    timeBlocksFromFile = await $.ajax({
-      url: pathToTimeBlocksFile,
-      type:'GET',
-      error: function(response) { console.log(response); }
+    timeBlocks = await $.ajax({
+	url: pathToTimeBlocksFile,
+	type:'GET',
+	error: function(response) {
+	    console.log("[load_time_blocks] GET failed: " + response); }
     });
 
     // Log the loaded time blocks for debugging purposes
     //console.log("load_time_blocks(" + collectionName + ", " + songName + ",  " + voiceName + ") loaded:\n" + time_blocks_file);
-    console.log("load_time_blocks() loaded:\n" + timeBlocksFromFile.slice(0, 10));
+    console.log("load_time_blocks() loaded:\n" + timeBlocks.slice(0, 10));
 
     // Split the file content by line breaks and convert each line to a float
-    timeBlocksFromFile = splitlines(timeBlocksFromFile).map(parseFloat);
+    timeBlocks = splitlines(timeBlocks).map(parseFloat);
   } catch (error) {
-    timeBlocksFromFile = [0];
-    console.warn(`Failed to load ${pathToTimeBlocksFile}, defaulting to no time blocks.`);
+      timeBlocks = create_time_blocks(voiceData);
+      console.log(`Made new time blocks.`);
+
+      // Stringify and the save the time blocks
+      let timeBlockString = timeBlocks.join('\n');
+      console.log("New time-blocks file: " + timeBlockString.slice(0, 20) + "...");
+      let data = new FormData();
+      data.append("data", timeBlockString);
+      data.append("path", pathToTimeBlocksFile);
+      let xhr = new XMLHttpRequest();
+      xhr.open( 'post', 'save_time_blocks.php', true );
+      xhr.send(data);
+      
   }
 
   // Return the array of time blocks
-  return timeBlocksFromFile;
+  return timeBlocks;
 }
 
 /**
@@ -624,7 +665,7 @@ async function writeTimeSyllables() {
 
   // At this point, saveData contains pairs of [time, syllable]
   // Converting saveData to a string to write to a file
-  let saveDataString = saveData.map(pair => pair.join('\t')).join('\n') + '\n'; // add newline
+  let saveDataString = saveData.map(pair => pair.join('\t')).join('\n');
   
   // Construct the path to the time-syllable file (partially)
   let time_syllables_path = collection_name + "/" + song_name + "/" + song_name + "_" + voice_file_extension;
@@ -870,13 +911,16 @@ function get_shifted_time(time, voice) {
  * Loads the lyrics for a song from a text file as an array of syllables (strings).
  * If it fails for some reason, returns an array with an empty string as the only element.
  *
+ *
+ *
  * @param {string} collectionName - The name of the collection of songs.
  * @param {string} songName - The name of the song for which to load syllables.
  * @returns {Promise<string[]>} A promise that resolves to an array of syllables as strings.
  */
-async function getLyricsFromFile(collectionName, songName) { //!! getLyricsFromFile should take voice as an argument
+async function getLyricsFromFile(collectionName, songName, voiceName) {
   // Construct the URL to the syllables file
-  let pathToSyllablesFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/syllables_" + languages[selected_language] + ".txt";
+  let voice_file_extension = voice_file_extensions[voiceName];
+  let pathToSyllablesFile = "georgian/data/syllables/" + collectionName + "/" + songName + "/" + voice_file_extension + "_syllables_" + languages[selected_language] + ".txt";
   
   let syllablesFromFile;
   try {
@@ -1012,7 +1056,7 @@ async function get_voice(collectionName, songName, voiceName) {
     }
     notes = await get_file(collectionName, songName, voice_file_extension, "notes");
     var dataNotes = splitlines(notes).map(function(ln){
-	return parseFloat(ln.split(' ')[1]);
+	return parseFloat(ln.split(' ')[1]); //!! Is it correct not to shift these?
     });
 
     cents_data = toCents([dataY, data_mad_low, data_mad_high, dataNotes]);
@@ -1060,14 +1104,14 @@ async function update_plot(collectionName, songName, voiceName) {
       return false
   }
 
+  var bass_data = await get_voice(collectionName, songName, "bass");
+    console.log("Got bass voice data of length " + bass_data.length);
   try {
     plot.bassTimeSyllables =  await readTimeSyllables(collectionName, songName, "bass");
   } catch (error) {
     console.log("Failed to read bass time-syllables file.");
-    plot.bassTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "bass")); //!! getLyricsFromFile should take voice as an argument
+      plot.bassTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName, "bass"), await load_time_blocks(collectionName, songName, "bass", bass_data));
   }
-
-  var bass_data = await get_voice(collectionName, songName, "bass");
 
   show_bass_lyrics = (selected_lyrics == 1);
   var bassLyricsTrace = {
@@ -1141,13 +1185,13 @@ async function update_plot(collectionName, songName, voiceName) {
     }
   };
 
+  var mid_data = await get_voice(collectionName, songName, "mid");
+
   try {
     plot.midTimeSyllables =  await readTimeSyllables(collectionName, songName, "mid");
   } catch (error) {
-    plot.midTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "mid"));
+      plot.midTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName, "mid"), await load_time_blocks(collectionName, songName, "mid", mid_data));
   }
-
-  var mid_data = await get_voice(collectionName, songName, "mid");
 
   show_mid_lyrics = (selected_lyrics == 2);
   var midLyricsTrace = {
@@ -1221,13 +1265,13 @@ async function update_plot(collectionName, songName, voiceName) {
     }
   };
 
+  var top_data = await get_voice(collectionName, songName, "top");
+
   try {
     plot.topTimeSyllables =  await readTimeSyllables(collectionName, songName, "top");
   } catch (error) {
-    plot.topTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName), await load_time_blocks(collectionName, songName, "top"));
+      plot.topTimeSyllables = createTimeSyllableStructure(await getLyricsFromFile(collectionName, songName, "top"), await load_time_blocks(collectionName, songName, "top", top_data));
   }
-
-  var top_data = await get_voice(collectionName, songName, "top");
 
   show_top_lyrics = (selected_lyrics == 2);
   var topLyricsTrace = {

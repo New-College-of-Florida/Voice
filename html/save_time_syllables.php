@@ -7,8 +7,8 @@
  */
  
 /**
-Attempts to perform some level of input validation before writing the save data to a
-save file.
+Saves both English and Georgian time-syllables files.
+Assumes syllables were validated when they were uploaded.
 */
 <?php
 include_once "georgian_english.php";
